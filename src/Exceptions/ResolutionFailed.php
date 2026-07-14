@@ -9,7 +9,7 @@ namespace Cbox\Dns\Exceptions;
  * timed out, or no bytes came back. Distinct from a successful query that simply
  * returned no records.
  */
-final class ResolutionFailed extends DnsException
+class ResolutionFailed extends DnsException
 {
     public static function make(string $nameserver, string $reason): self
     {

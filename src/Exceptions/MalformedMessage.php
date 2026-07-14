@@ -9,7 +9,7 @@ namespace Cbox\Dns\Exceptions;
  * pointer loop, an impossible length). Distinct from a query that simply found
  * no records.
  */
-final class MalformedMessage extends DnsException
+class MalformedMessage extends DnsException
 {
     public static function make(string $reason): self
     {
