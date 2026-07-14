@@ -42,7 +42,7 @@ $bom = [
     'metadata' => [
         'tools' => [[
             'vendor' => 'cboxdk',
-            'name' => 'laravel-id-sbom',
+            'name' => 'dns-sbom',
             'version' => '1.0.0',
         ]],
         'component' => [
@@ -121,7 +121,7 @@ function licenseEntries(array|string $license): array
 
 function deterministicUuid(string $seed): string
 {
-    $hash = md5('cboxdk/laravel-id:'.$seed);
+    $hash = md5('cboxdk/dns:'.$seed);
 
     return sprintf(
         '%s-%s-4%s-%s-%s',

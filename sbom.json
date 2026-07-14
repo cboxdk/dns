@@ -1,0 +1,22 @@
+{
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.5",
+    "serialNumber": "urn:uuid:c192e5ec-50b6-4149-8582-5d49b7d62224",
+    "version": 1,
+    "metadata": {
+        "tools": [
+            {
+                "vendor": "cboxdk",
+                "name": "dns-sbom",
+                "version": "1.0.0"
+            }
+        ],
+        "component": {
+            "type": "library",
+            "bom-ref": "cboxdk/dns",
+            "name": "cboxdk/dns",
+            "purl": "pkg:composer/cboxdk/dns"
+        }
+    },
+    "components": []
+}
