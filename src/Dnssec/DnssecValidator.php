@@ -29,7 +29,7 @@ use Cbox\Dns\ValueObjects\DnsResponse;
  * is checked against an anchored key, the fetch may go through any {@see Resolver}
  * (a recursive DO query, a fake) without weakening the result.
  */
-final class DnssecValidator
+class DnssecValidator
 {
     /** @var list<Ds> */
     private array $trustAnchors;

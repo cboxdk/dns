@@ -13,7 +13,7 @@ use Cbox\Dns\Enums\RecordType;
  * owner name and {@see $nextDomainName} no other name exists, and that this owner
  * has exactly the RR types in {@see $types}.
  */
-final readonly class Nsec
+readonly class Nsec
 {
     /**
      * @param  array<int, true>  $types  present RR type codes, keyed by code

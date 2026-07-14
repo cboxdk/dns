@@ -11,7 +11,7 @@ use Cbox\Dns\Dnssec\Exceptions\MalformedRdata;
  * windows, each `window-number, length, bitmap` where a set bit at position N of
  * window W means RR type `W*256 + N` is present at the owner name.
  */
-final class TypeBitmap
+class TypeBitmap
 {
     /**
      * @return array<int, true> the set of present RR type codes, as a set keyed

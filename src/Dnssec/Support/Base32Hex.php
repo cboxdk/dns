@@ -10,7 +10,7 @@ use Cbox\Dns\Dnssec\Exceptions\MalformedRdata;
  * Base32hex ("extended hex", RFC 4648 §7) codec — the encoding NSEC3 uses for
  * hashed owner names (RFC 5155 §1.3). Case-insensitive on decode.
  */
-final class Base32Hex
+class Base32Hex
 {
     private const string ALPHABET = '0123456789abcdefghijklmnopqrstuv';
 

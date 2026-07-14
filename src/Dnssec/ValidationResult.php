@@ -12,7 +12,7 @@ use Cbox\Dns\Dnssec\Records\Dnskey;
  * concerns, and a human-readable reason. When the zone validated Secure it also
  * carries the trusted DNSKEY set, so a follow-on record validation can reuse it.
  */
-final readonly class ValidationResult
+readonly class ValidationResult
 {
     /**
      * @param  list<Dnskey>  $dnskeys  the validated zone keys (only for Secure)

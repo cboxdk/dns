@@ -13,7 +13,7 @@ use Cbox\Dns\Protocol\Reader;
  * signer fields must be uncompressed (RFC 4034 §6.2), so a pointer here is a
  * hard error, not something to silently resolve.
  */
-final class WireName
+class WireName
 {
     /**
      * Encode a dotted name to length-prefixed wire labels terminated by the root.

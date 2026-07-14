@@ -11,7 +11,7 @@ use Cbox\Dns\Dnssec\Contracts\Clock;
  * RRSIG against its real (immutable) validity window, or that exercise the
  * expired / not-yet-valid rejection paths deterministically.
  */
-final class FrozenClock implements Clock
+class FrozenClock implements Clock
 {
     public function __construct(private readonly int $timestamp) {}
 

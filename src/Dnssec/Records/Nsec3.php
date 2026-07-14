@@ -13,7 +13,7 @@ use Cbox\Dns\Enums\RecordType;
  * zone's names are not enumerable. Carries the hash algorithm, flags, iteration
  * count, salt, the next hashed owner name, and the present-type bitmap.
  */
-final readonly class Nsec3
+readonly class Nsec3
 {
     /**
      * @param  array<int, true>  $types  present RR type codes, keyed by code

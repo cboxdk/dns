@@ -10,7 +10,7 @@ use Cbox\Dns\Dnssec\Exceptions\MalformedRdata;
  * A parsed DS RR (RFC 4034 §5): the delegation link a parent zone publishes to
  * commit to a child's KSK. `digest` is the raw hash octets over the child DNSKEY.
  */
-final readonly class Ds
+readonly class Ds
 {
     private function __construct(
         public int $keyTag,

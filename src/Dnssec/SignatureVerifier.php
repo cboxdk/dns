@@ -27,7 +27,7 @@ use Cbox\Dns\ValueObjects\DnsRecord;
  * signature — returns false. An unrecognised algorithm is a FAILURE, never a
  * pass.
  */
-final class SignatureVerifier
+class SignatureVerifier
 {
     public function __construct(
         private readonly Clock $clock = new SystemClock,

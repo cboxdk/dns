@@ -10,7 +10,7 @@ namespace Cbox\Dns\Dnssec\Support;
  * labels compared as left-justified, lowercased, unsigned octet strings. This is
  * the ordering NSEC/NSEC3 range checks depend on.
  */
-final class CanonicalName
+class CanonicalName
 {
     /**
      * @return list<string> labels of `$name`, lowercased, apex-first order intact

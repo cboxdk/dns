@@ -13,7 +13,7 @@ use Cbox\Dns\Enums\RecordType;
  * exact prefix — the RDATA up to but excluding the signature octets — that must
  * be prepended to the canonical RRset when reconstructing the signed message.
  */
-final readonly class Rrsig
+readonly class Rrsig
 {
     private function __construct(
         public int $typeCovered,

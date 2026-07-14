@@ -18,7 +18,7 @@ use Cbox\Dns\Dnssec\Support\WireName;
  * algorithm mismatch, or a digest that does not compare equal all return false.
  * The digest comparison is constant-time.
  */
-final class DsVerifier
+class DsVerifier
 {
     public function matches(Ds $ds, Dnskey $key, string $ownerName): bool
     {

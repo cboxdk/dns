@@ -24,7 +24,7 @@ use Cbox\Dns\ValueObjects\DnsRecord;
  * (§6.3). Name-bearing RDATA is down-cased for the types RFC 4034 §6.2 (as
  * amended by RFC 6840 §5.1) requires; everything else is byte-verbatim.
  */
-final class Canonicalizer
+class Canonicalizer
 {
     private const int CLASS_IN = 1;
 

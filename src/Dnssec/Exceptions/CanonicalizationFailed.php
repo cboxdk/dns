@@ -10,7 +10,7 @@ namespace Cbox\Dns\Dnssec\Exceptions;
  * a signed RR must never contain. Fail-closed: the verifier maps this to bogus
  * rather than guessing at the intended bytes.
  */
-final class CanonicalizationFailed extends DnssecException
+class CanonicalizationFailed extends DnssecException
 {
     public static function make(string $reason): self
     {

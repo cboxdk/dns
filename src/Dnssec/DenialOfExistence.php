@@ -23,7 +23,7 @@ use Cbox\Dns\ValueObjects\DnsRecord;
  * Deny-by-default: a proof returns true only when the covering/matching ranges
  * conclusively establish absence. Anything short of that is false.
  */
-final class DenialOfExistence
+class DenialOfExistence
 {
     /**
      * The largest NSEC3 iteration count we are willing to hash (RFC 9276). The RFC

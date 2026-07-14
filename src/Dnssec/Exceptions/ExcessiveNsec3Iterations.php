@@ -9,7 +9,7 @@ namespace Cbox\Dns\Dnssec\Exceptions;
  * compute (RFC 9276): a high iteration count is a CPU-amplification vector, so
  * the proof is refused before any hashing rather than paid for.
  */
-final class ExcessiveNsec3Iterations extends DnssecException
+class ExcessiveNsec3Iterations extends DnssecException
 {
     public static function make(int $iterations, int $cap): self
     {

@@ -17,7 +17,7 @@ use Cbox\Dns\Dnssec\Records\Ds;
  * The validator anchors on these: the root DNSKEY RRset is trusted only once a
  * key in it matches one of these DS records and signs the set.
  */
-final class TrustAnchor
+class TrustAnchor
 {
     private const string KSK_2017_DIGEST = 'E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D';
 

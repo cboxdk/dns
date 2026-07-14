@@ -13,7 +13,7 @@ use Cbox\Dns\Dnssec\Exceptions\MalformedRdata;
  * turning an ECDSA RRSIG's raw r‖s signature into the DER SEQUENCE OpenSSL
  * expects. We build the exact structures — never hand-roll the signature math.
  */
-final class Der
+class Der
 {
     // rsaEncryption (1.2.840.113549.1.1.1) with NULL parameters.
     private const string RSA_ALGID = "\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01\x05\x00";

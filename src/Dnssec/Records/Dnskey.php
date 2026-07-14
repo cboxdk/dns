@@ -11,7 +11,7 @@ use Cbox\Dns\Dnssec\Exceptions\MalformedRdata;
  * raw public-key octets, plus the verbatim RDATA needed for the RFC 4034 App. B
  * key-tag computation and for DS digesting.
  */
-final readonly class Dnskey
+readonly class Dnskey
 {
     private function __construct(
         public int $flags,
