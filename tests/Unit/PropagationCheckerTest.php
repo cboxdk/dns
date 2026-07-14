@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Propagation\PropagationChecker;
 use Cbox\Dns\Propagation\PropagationStatus;
+use Cbox\Dns\Propagation\PublicResolvers;
 use Cbox\Dns\Resolvers\AuthoritativeResolver;
 use Cbox\Dns\Testing\FakeResolver;
 
@@ -72,6 +73,9 @@ it('reports Misconfigured when the authoritative answer is empty', function () u
         ->and($report->authoritativeValues)->toBe([]);
 });
 
-it('defaults to the six public resolvers when no panel is injected', function (): void {
-    expect(PropagationChecker::DEFAULT_NAMESERVERS)->toContain('8.8.8.8', '1.1.1.1', '9.9.9.9', '208.67.222.222');
+it('derives its default panel from the public-resolver registry', function (): void {
+    expect(PropagationChecker::defaultNameservers())
+        ->toContain('8.8.8.8', '1.1.1.1', '9.9.9.9', '208.67.222.222')
+        ->and(PropagationChecker::defaultNameservers())
+        ->toBe(array_map(fn ($r) => $r->ip, PublicResolvers::default()));
 });
