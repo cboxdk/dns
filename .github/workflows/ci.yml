@@ -26,7 +26,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: sockets, openssl, sodium
+          extensions: sockets, openssl, sodium, intl
           coverage: none
           tools: composer:v2
 
@@ -51,4 +51,6 @@ jobs:
           git diff --exit-code sbom.json
 
       - name: Dependency audit
+        # Full tree (incl. dev): with zero runtime dependencies a --no-dev audit has
+        # an empty package set and errors, and the dev tree is the only thing to vet.
         run: composer audit

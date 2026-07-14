@@ -1,7 +1,13 @@
 {
     "name": "cboxdk/dns",
     "description": "Zero-dependency raw PHP DNS resolver, domain-ownership verification, and intoDNS/MxToolbox-style diagnostics. Queries authoritative nameservers directly over sockets — never trusts the recursive cache for ownership checks.",
-    "keywords": ["php", "dns", "resolver", "domain-verification", "dns-diagnostics", "dig", "mxtoolbox", "intodns"],
+    "keywords": [
+        "php", "dns", "resolver", "dns-resolver", "domain-verification", "dns-diagnostics",
+        "dig", "mxtoolbox", "intodns", "dnssec", "doh", "dns-over-https", "authoritative",
+        "propagation", "delegation", "dns-trace", "reverse-dns", "ptr", "cname",
+        "spf", "dkim", "dmarc", "caa", "svcb", "https-record", "tlsa", "dane", "sshfp",
+        "idn", "punycode", "networking"
+    ],
     "homepage": "https://github.com/cboxdk/dns",
     "license": "MIT",
     "authors": [
@@ -16,10 +22,11 @@
         "pestphp/pest": "^3.5 || ^4.0",
         "phpstan/phpstan": "^2.0"
     },
-    "bin": [
-        "bin/check-licenses.php",
-        "bin/generate-sbom.php"
-    ],
+    "suggest": {
+        "ext-intl": "Punycode conversion of internationalized (IDN) domain names",
+        "ext-openssl": "RSA/ECDSA signature verification for the DNSSEC module",
+        "ext-sodium": "Ed25519 signature verification for the DNSSEC module"
+    },
     "autoload": {
         "psr-4": { "Cbox\\Dns\\": "src" }
     },
@@ -30,7 +37,7 @@
         "lint": "pint --test",
         "analyse": "phpstan analyse --no-progress --memory-limit=1G",
         "test": "pest",
-        "license-check": "@php bin/check-licenses.php",
+        "license-check": "@php bin/check-licenses.php --dev",
         "sbom": "@php bin/generate-sbom.php",
         "qa": ["@lint", "@analyse", "@test", "@license-check", "@composer audit"]
     },

@@ -47,43 +47,153 @@ foreach ($packages as $package) {
         continue;
     }
 
-    $licenses = normalizeLicenses($package['license'] ?? []);
+    $license = $package['license'] ?? [];
+    $rendered = renderLicense($license);
 
-    if ($licenses === []) {
+    if ($rendered === '') {
         $violations[$name] = '(no license declared)';
 
         continue;
     }
 
-    $allowed = array_filter($licenses, static fn (string $l): bool => in_array($l, ALLOWED, true));
-
-    if ($allowed === []) {
-        $violations[$name] = implode(' OR ', $licenses);
+    if (! isPermissive($license)) {
+        $violations[$name] = $rendered;
     }
 }
 
 /**
- * Flatten a composer license field into individual SPDX identifiers, splitting
- * disjunctive/conjunctive expressions ("MIT OR GPL-2.0", "(MIT AND BSD)").
+ * Whether a composer license field is satisfiable under a permissive license.
+ * SPDX semantics are honoured: an array (composer's disjunctive form) or an `OR`
+ * expression passes if ANY choice is permissive; an `AND` expression requires
+ * EVERY conjunct to be permissive (you must comply with all of them).
  *
  * @param  list<string>|string  $license
- * @return list<string>
  */
-function normalizeLicenses(array|string $license): array
+function isPermissive(array|string $license): bool
 {
-    $items = is_array($license) ? $license : [$license];
-    $out = [];
-
-    foreach ($items as $item) {
-        foreach (preg_split('/\s+(?:OR|AND)\s+/i', trim((string) $item)) ?: [] as $part) {
-            $part = trim($part, " \t()");
-            if ($part !== '') {
-                $out[] = $part;
+    if (is_array($license)) {
+        // Composer treats an array of licenses as a choice (disjunctive).
+        foreach ($license as $item) {
+            if (is_string($item) && isPermissiveExpression($item)) {
+                return true;
             }
         }
+
+        return false;
     }
 
-    return array_values(array_unique($out));
+    return isPermissiveExpression($license);
+}
+
+/**
+ * Evaluate a single SPDX license expression, honouring parentheses and the SPDX
+ * precedence where AND binds tighter than OR. OR is satisfied if either side is
+ * permissive; AND requires both sides. Returns whether the expression is
+ * satisfiable under the permissive allow-list.
+ */
+function isPermissiveExpression(string $expression): bool
+{
+    $tokens = spdxTokens($expression);
+    $pos = 0;
+    $result = spdxOr($tokens, $pos);
+
+    // A trailing unparsed token means we could not understand the expression;
+    // fail closed rather than pass an expression we did not fully evaluate.
+    return $pos === count($tokens) && $result;
+}
+
+/**
+ * @return list<string>
+ */
+function spdxTokens(string $expression): array
+{
+    preg_match_all('/\(|\)|[^\s()]+/', $expression, $m);
+
+    return $m[0];
+}
+
+/**
+ * expr := term (OR term)*
+ *
+ * @param  list<string>  $tokens
+ */
+function spdxOr(array $tokens, int &$pos): bool
+{
+    $value = spdxAnd($tokens, $pos);
+
+    while (($tokens[$pos] ?? null) !== null && strcasecmp($tokens[$pos], 'OR') === 0) {
+        $pos++;
+        $value = spdxAnd($tokens, $pos) || $value;
+    }
+
+    return $value;
+}
+
+/**
+ * term := factor (AND factor)*
+ *
+ * @param  list<string>  $tokens
+ */
+function spdxAnd(array $tokens, int &$pos): bool
+{
+    $value = spdxFactor($tokens, $pos);
+
+    while (($tokens[$pos] ?? null) !== null && strcasecmp($tokens[$pos], 'AND') === 0) {
+        $pos++;
+        $value = spdxFactor($tokens, $pos) && $value;
+    }
+
+    return $value;
+}
+
+/**
+ * factor := '(' expr ')' | identifier ['WITH' exception]
+ *
+ * @param  list<string>  $tokens
+ */
+function spdxFactor(array $tokens, int &$pos): bool
+{
+    $token = $tokens[$pos] ?? null;
+
+    if ($token === '(') {
+        $pos++;
+        $value = spdxOr($tokens, $pos);
+
+        if (($tokens[$pos] ?? null) === ')') {
+            $pos++;
+        }
+
+        return $value;
+    }
+
+    if ($token === null || $token === ')') {
+        return false;
+    }
+
+    $pos++;
+    $identifier = $token;
+
+    // An SPDX "WITH <exception>" narrows a permissive base license; judge on the
+    // base identifier (e.g. "Apache-2.0 WITH LLVM-exception" → Apache-2.0).
+    if (($tokens[$pos] ?? null) !== null && strcasecmp($tokens[$pos], 'WITH') === 0) {
+        $pos += 2; // consume WITH and the exception id
+    }
+
+    return in_array($identifier, ALLOWED, true);
+}
+
+/**
+ * A human-readable rendering of a composer license field for the failure report.
+ *
+ * @param  list<string>|string  $license
+ */
+function renderLicense(array|string $license): string
+{
+    if (is_array($license)) {
+        return implode(' OR ', array_filter($license, 'is_string'));
+    }
+
+    return trim($license);
 }
 
 $scope = $includeDev ? 'production + dev' : 'production';
