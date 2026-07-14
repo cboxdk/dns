@@ -21,7 +21,7 @@ namespace Cbox\Dns\Propagation;
  * regions) are a documented non-goal here — see the module roadmap — not a claim
  * this registry makes.
  */
-final class PublicResolvers
+class PublicResolvers
 {
     /**
      * Every named public resolver known to the registry.

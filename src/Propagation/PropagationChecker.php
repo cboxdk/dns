@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Cbox\Dns\Propagation;
 
+use Cbox\Dns\Contracts\ConcurrentResolver;
 use Cbox\Dns\Contracts\Resolver;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
 use Cbox\Dns\Resolvers\AuthoritativeResolver;
+use Cbox\Dns\Resolvers\SocketResolver;
 use Cbox\Dns\Testing\FakeResolver;
+use Cbox\Dns\ValueObjects\QueryRequest;
 
 /**
  * intoDNS/whatsmydns-style propagation check: compares the authoritative record
@@ -17,36 +20,43 @@ use Cbox\Dns\Testing\FakeResolver;
  *
  * Both the public panel and the authoritative view resolve through injected
  * collaborators, so {@see FakeResolver} drives the whole check
- * with per-nameserver stubs and no network.
+ * with per-nameserver stubs and no network. When the public resolver implements
+ * {@see ConcurrentResolver} (the default {@see SocketResolver}
+ * does), the whole panel is polled concurrently under one timeout budget rather
+ * than one server at a time.
  */
-final class PropagationChecker
+class PropagationChecker
 {
-    /**
-     * The default public recursive resolvers polled: Google, Cloudflare, Quad9, OpenDNS.
-     *
-     * @var list<string>
-     */
-    public const array DEFAULT_NAMESERVERS = [
-        '8.8.8.8',
-        '8.8.4.4',
-        '1.1.1.1',
-        '1.0.0.1',
-        '9.9.9.9',
-        '208.67.222.222',
-    ];
+    /** @var list<string> */
+    private readonly array $publicNameservers;
 
     /**
-     * @param  list<string>  $publicNameservers
+     * @param  list<string>|null  $publicNameservers  overrides the lean default
+     *                                                panel; null uses
+     *                                                {@see self::defaultNameservers()}
      */
     public function __construct(
         private readonly Resolver $publicResolver,
         private readonly AuthoritativeResolver $authoritative,
-        private readonly array $publicNameservers = self::DEFAULT_NAMESERVERS,
-    ) {}
+        ?array $publicNameservers = null,
+    ) {
+        $this->publicNameservers = $publicNameservers ?? self::defaultNameservers();
+    }
+
+    /**
+     * The lean default panel — one IP per major operator — derived from the named
+     * {@see PublicResolvers} registry so the two never drift apart.
+     *
+     * @return list<string>
+     */
+    public static function defaultNameservers(): array
+    {
+        return array_map(static fn (PublicResolver $r): string => $r->ip, PublicResolvers::default());
+    }
 
     /**
      * The default lean check: compare the authoritative set against this checker's
-     * bare IP panel (no provider labels). Behaviour is unchanged from the original.
+     * bare IP panel (no provider labels).
      */
     public function check(string $host, RecordType $type, string $zone): PropagationReport
     {
@@ -91,11 +101,13 @@ final class PropagationChecker
     {
         $authoritativeValues = $this->normalize($this->authoritativeValues($host, $type, $zone));
 
+        $publicValues = $this->publicValues($host, $type, $probes);
+
         $results = [];
         $allAgree = true;
 
-        foreach ($probes as $probe) {
-            $values = $this->normalize($this->publicValues($host, $type, $probe['ip']));
+        foreach ($probes as $i => $probe) {
+            $values = $this->normalize($publicValues[$i]);
             $agrees = $authoritativeValues !== [] && $values === $authoritativeValues;
             $allAgree = $allAgree && $agrees;
 
@@ -103,6 +115,33 @@ final class PropagationChecker
         }
 
         return new PropagationReport($authoritativeValues, $results, $this->status($authoritativeValues, $allAgree));
+    }
+
+    /**
+     * The public panel's answers, one per probe (index-aligned). Uses the
+     * concurrent path when the resolver supports it, else a sequential fallback.
+     *
+     * @param  list<array{ip: string, label: string|null}>  $probes
+     * @return list<list<string>>
+     */
+    private function publicValues(string $host, RecordType $type, array $probes): array
+    {
+        if ($this->publicResolver instanceof ConcurrentResolver) {
+            $requests = array_map(
+                static fn (array $probe): QueryRequest => new QueryRequest($host, $type, $probe['ip']),
+                $probes,
+            );
+
+            return array_map(
+                static fn ($response): array => $response->values(),
+                $this->publicResolver->queryConcurrently($requests),
+            );
+        }
+
+        return array_map(
+            fn (array $probe): array => $this->publicValuesFor($host, $type, $probe['ip']),
+            $probes,
+        );
     }
 
     /**
@@ -132,7 +171,7 @@ final class PropagationChecker
     /**
      * @return list<string>
      */
-    private function publicValues(string $host, RecordType $type, string $nameserver): array
+    private function publicValuesFor(string $host, RecordType $type, string $nameserver): array
     {
         try {
             return $this->publicResolver->query($host, $type, $nameserver)->values();

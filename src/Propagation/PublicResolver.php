@@ -15,7 +15,7 @@ namespace Cbox\Dns\Propagation;
  * label for the operator, not proof of where the lookup was answered. See
  * {@see PropagationChecker} for the honest scope of a multi-provider check.
  */
-final readonly class PublicResolver
+readonly class PublicResolver
 {
     public function __construct(
         public string $name,

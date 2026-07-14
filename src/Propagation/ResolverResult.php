@@ -9,7 +9,7 @@ namespace Cbox\Dns\Propagation;
  * asked, the provider's human `label` (null for a bare, unnamed IP panel), the
  * values it returned, and whether that set matches the authoritative one.
  */
-final readonly class ResolverResult
+readonly class ResolverResult
 {
     /**
      * @param  list<string>  $values

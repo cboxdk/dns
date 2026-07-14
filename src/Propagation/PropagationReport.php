@@ -8,7 +8,7 @@ namespace Cbox\Dns\Propagation;
  * The result of a propagation check: the authoritative record set, each public
  * resolver's view of it, and an overall {@see PropagationStatus}.
  */
-final readonly class PropagationReport
+readonly class PropagationReport
 {
     /**
      * @param  list<string>  $authoritativeValues
