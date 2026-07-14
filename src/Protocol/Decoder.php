@@ -54,7 +54,8 @@ final class Decoder
             $recordType = RecordType::fromCode($type);
 
             if ($recordType === $expected) {
-                $records[] = $this->rdata($reader, $recordType, $host, $ttl, $rdlength, $rdataStart);
+                $raw = substr($message, $rdataStart, $rdlength);
+                $records[] = $this->rdata($reader, $recordType, $host, $ttl, $rdlength, $raw);
             }
 
             // Always resume exactly past this RR's RDATA — never trust our own
@@ -76,7 +77,7 @@ final class Decoder
         return ($flags & 0x0200) !== 0; // TC bit
     }
 
-    private function rdata(Reader $reader, RecordType $type, string $host, int $ttl, int $rdlength, int $start): DnsRecord
+    private function rdata(Reader $reader, RecordType $type, string $host, int $ttl, int $rdlength, string $raw): DnsRecord
     {
         $priority = null;
 
@@ -99,9 +100,14 @@ final class Decoder
             })(),
             RecordType::SOA => $this->soa($reader),
             RecordType::CAA => $this->caa($reader, $rdlength),
+            // DNSSEC records are surfaced as base64 of their raw RDATA; the Dnssec
+            // module re-parses the structured fields from `raw` (kept verbatim so
+            // canonical-form signature reconstruction stays byte-exact).
+            RecordType::DS, RecordType::RRSIG, RecordType::DNSKEY,
+            RecordType::NSEC, RecordType::NSEC3 => base64_encode($raw),
         };
 
-        return new DnsRecord($type, $host, $value, $ttl, $priority);
+        return new DnsRecord($type, $host, $value, $ttl, $priority, $raw);
     }
 
     private function ip(string $bytes): string
