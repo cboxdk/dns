@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cbox\Dns;
 
 use Cbox\Dns\Contracts\Resolver;
+use Cbox\Dns\Dnssec\DnssecValidator;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Propagation\PropagationChecker;
 use Cbox\Dns\Propagation\PropagationReport;
@@ -85,5 +86,15 @@ final class Dns
     public function authoritative(): AuthoritativeResolver
     {
         return $this->authoritative;
+    }
+
+    /**
+     * The DNSSEC chain validator, anchored on the IANA root trust anchors and
+     * fetching DNSKEY/DS/RRSIG through this facade's resolver. Trust comes from
+     * validating the signatures, not from the transport.
+     */
+    public function dnssec(): DnssecValidator
+    {
+        return new DnssecValidator($this->resolver);
     }
 }

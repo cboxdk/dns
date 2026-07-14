@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Cbox\Dns\Dns;
+use Cbox\Dns\Dnssec\DnssecValidator;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Resolvers\AuthoritativeResolver;
 use Cbox\Dns\Testing\FakeResolver;
@@ -44,4 +45,13 @@ it('exposes the resolver and authoritative seams for DNSSEC and other extensions
 
     expect($dns->resolver())->toBe($fake)
         ->and($dns->authoritative())->toBeInstanceOf(AuthoritativeResolver::class);
+});
+
+it('exposes a DNSSEC validator that fails closed on an unstubbed resolver', function (): void {
+    $dns = new Dns(new FakeResolver);
+
+    // The real IANA root anchors cannot be satisfied by an empty fake resolver,
+    // so validation is bogus — never silently secure (deny-by-default).
+    expect($dns->dnssec())->toBeInstanceOf(DnssecValidator::class)
+        ->and($dns->dnssec()->validate('example.com')->isBogus())->toBeTrue();
 });

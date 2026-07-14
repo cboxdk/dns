@@ -54,10 +54,17 @@ final class HttpsResolver implements Resolver
             : $this->defaultFetcher();
     }
 
-    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true): DnsResponse
+    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true, bool $dnssec = false): DnsResponse
     {
         $host = rtrim($host, '.');
-        $url = $this->endpoint.'?'.http_build_query(['name' => $host, 'type' => $type->value]);
+        $query = ['name' => $host, 'type' => $type->value];
+
+        if ($dnssec) {
+            // The Google/Cloudflare JSON API takes `do=1` to request DNSSEC data.
+            $query['do'] = '1';
+        }
+
+        $url = $this->endpoint.'?'.http_build_query($query);
 
         $body = ($this->fetcher)($url);
 

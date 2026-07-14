@@ -40,7 +40,19 @@ final class FakeResolver implements Resolver
         return $this;
     }
 
-    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true): DnsResponse
+    /**
+     * Stub a full {@see DnsResponse} — including raw DNSSEC records and an
+     * authority section — for a host+type (optionally per nameserver). This is
+     * the seam the DNSSEC chain-walk tests use to drive each zone level offline.
+     */
+    public function stubResponse(string $host, RecordType $type, DnsResponse $response, ?string $nameserver = null): self
+    {
+        $this->stubs[$this->key($host, $type, $nameserver)] = $response;
+
+        return $this;
+    }
+
+    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true, bool $dnssec = false): DnsResponse
     {
         return $this->stubs[$this->key($host, $type, $nameserver)]
             ?? $this->stubs[$this->key($host, $type, null)]

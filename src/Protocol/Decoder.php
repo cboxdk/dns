@@ -25,15 +25,11 @@ final class Decoder
         $flags = $reader->uint16();
         $qdcount = $reader->uint16();
         $ancount = $reader->uint16();
-        $reader->uint16();               // nscount
+        $nscount = $reader->uint16();
         $reader->uint16();               // arcount
 
-        $rcode = $flags & 0x0F;
-        if ($rcode !== 0) {
-            // NXDOMAIN (3) and friends simply mean "no such records" for our
-            // purposes; return an empty, still-flagged response.
-            return new DnsResponse($expected, $host, [], null, ($flags & 0x0400) !== 0);
-        }
+        $authoritative = ($flags & 0x0400) !== 0; // AA
+        $authenticated = ($flags & 0x0020) !== 0; // AD (advisory — we validate ourselves)
 
         for ($i = 0; $i < $qdcount; $i++) {
             $reader->name();
@@ -41,10 +37,42 @@ final class Decoder
             $reader->uint16();           // qclass
         }
 
+        // The answer and authority sections are both walked in full: DNSSEC needs
+        // the RRSIGs that ride alongside the answer, and NSEC/NSEC3 denial proofs
+        // live in the authority section (even on an NXDOMAIN, RCODE=3). Unknown
+        // types are skipped by exact RDLENGTH so the walk can never desync.
+        $answer = $this->section($reader, $message, $ancount);
+        $authority = $this->section($reader, $message, $nscount);
+
+        $records = array_values(array_filter(
+            $answer,
+            static fn (DnsRecord $r): bool => $r->type === $expected,
+        ));
+
+        return new DnsResponse(
+            $expected,
+            $host,
+            $records,
+            null,
+            $authoritative,
+            $authenticated,
+            $answer,
+            $authority,
+        );
+    }
+
+    /**
+     * Read a whole RR section, returning every recognised record with its true
+     * owner name. Unknown types advance by RDLENGTH and are dropped.
+     *
+     * @return list<DnsRecord>
+     */
+    private function section(Reader $reader, string $message, int $count): array
+    {
         $records = [];
 
-        for ($i = 0; $i < $ancount; $i++) {
-            $reader->name();             // owner name
+        for ($i = 0; $i < $count; $i++) {
+            $owner = $reader->name();
             $type = $reader->uint16();
             $reader->uint16();           // class
             $ttl = $reader->uint32();
@@ -53,9 +81,9 @@ final class Decoder
 
             $recordType = RecordType::fromCode($type);
 
-            if ($recordType === $expected) {
+            if ($recordType !== null) {
                 $raw = substr($message, $rdataStart, $rdlength);
-                $records[] = $this->rdata($reader, $recordType, $host, $ttl, $rdlength, $raw);
+                $records[] = $this->rdata($reader, $recordType, $owner, $ttl, $rdlength, $raw);
             }
 
             // Always resume exactly past this RR's RDATA — never trust our own
@@ -63,7 +91,7 @@ final class Decoder
             $reader->seek($rdataStart + $rdlength);
         }
 
-        return new DnsResponse($expected, $host, $records, null, ($flags & 0x0400) !== 0);
+        return $records;
     }
 
     public static function isTruncated(string $message): bool

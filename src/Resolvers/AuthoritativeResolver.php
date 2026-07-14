@@ -58,7 +58,7 @@ final class AuthoritativeResolver
      * NS IP is tried; {@see ResolutionFailed} is surfaced only when none answer
      * (or the zone exposes no reachable authoritative server).
      */
-    public function query(string $host, RecordType $type, string $zone): DnsResponse
+    public function query(string $host, RecordType $type, string $zone, bool $dnssec = false): DnsResponse
     {
         $nameservers = $this->authoritativeFor($zone);
 
@@ -70,7 +70,7 @@ final class AuthoritativeResolver
 
         foreach ($nameservers as $nameserver) {
             try {
-                return $this->resolver->query($host, $type, $nameserver, recursion: false);
+                return $this->resolver->query($host, $type, $nameserver, recursion: false, dnssec: $dnssec);
             } catch (ResolutionFailed $failure) {
                 $lastFailure = $failure;
             }

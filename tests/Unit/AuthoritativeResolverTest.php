@@ -46,13 +46,13 @@ it('falls through to the next NS IP when the first fails, surfacing the answer',
     {
         public function __construct(private readonly FakeResolver $delegate) {}
 
-        public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true): DnsResponse
+        public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true, bool $dnssec = false): DnsResponse
         {
             if ($nameserver === '192.0.2.1' && $host === 'www.example.com') {
                 throw ResolutionFailed::make($nameserver, 'timed out');
             }
 
-            return $this->delegate->query($host, $type, $nameserver, $recursion);
+            return $this->delegate->query($host, $type, $nameserver, $recursion, $dnssec);
         }
     };
 

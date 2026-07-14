@@ -26,11 +26,11 @@ final class SocketResolver implements Resolver
         private readonly Decoder $decoder = new Decoder,
     ) {}
 
-    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true): DnsResponse
+    public function query(string $host, RecordType $type, ?string $nameserver = null, bool $recursion = true, bool $dnssec = false): DnsResponse
     {
         $nameserver ??= $this->defaultNameserver;
         $id = random_int(0, 0xFFFF);
-        $message = $this->encoder->query($host, $type, $recursion, $id);
+        $message = $this->encoder->query($host, $type, $recursion, $id, $dnssec);
 
         $response = $this->overUdp($nameserver, $message);
 
@@ -46,6 +46,9 @@ final class SocketResolver implements Resolver
             $decoded->records,
             $nameserver,
             $decoded->authoritative,
+            $decoded->authenticated,
+            $decoded->answer,
+            $decoded->authority,
         );
     }
 
