@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Cbox\Dns;
 
 use Cbox\Dns\Contracts\Resolver;
+use Cbox\Dns\Diagnostics\Diagnostics;
+use Cbox\Dns\Diagnostics\Report;
 use Cbox\Dns\Dnssec\DnssecValidator;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Propagation\PropagationChecker;
@@ -68,6 +70,17 @@ final class Dns
     public function checkPropagation(string $host, RecordType $type, string $zone): PropagationReport
     {
         return (new PropagationChecker($this->resolver, $this->authoritative))->check($host, $type, $zone);
+    }
+
+    /**
+     * Run the intoDNS/MxToolbox-style diagnostics catalog against a domain,
+     * returning a structured {@see Report} of delegation, SOA, mail, SPF/DMARC,
+     * CAA, DNSSEC, and propagation findings — all resolved through this facade's
+     * resolver.
+     */
+    public function diagnose(string $domain): Report
+    {
+        return (new Diagnostics($this->resolver))->run($domain);
     }
 
     /**

@@ -44,19 +44,62 @@ final class PropagationChecker
         private readonly array $publicNameservers = self::DEFAULT_NAMESERVERS,
     ) {}
 
+    /**
+     * The default lean check: compare the authoritative set against this checker's
+     * bare IP panel (no provider labels). Behaviour is unchanged from the original.
+     */
     public function check(string $host, RecordType $type, string $zone): PropagationReport
+    {
+        $probes = array_map(
+            static fn (string $ip): array => ['ip' => $ip, 'label' => null],
+            $this->publicNameservers,
+        );
+
+        return $this->report($host, $type, $zone, $probes);
+    }
+
+    /**
+     * The wider, named check: poll the FULL public-resolver registry
+     * ({@see PublicResolvers::all()}) and label each {@see ResolverResult} with its
+     * provider, so a report reads "Google Public DNS ✓ / Cloudflare ✓ / Quad9
+     * pending" rather than bare IPs.
+     *
+     * Honest scope: this queries many public resolvers FROM THIS HOST — a
+     * cache-diversity signal across independent operators, NOT true global
+     * geographic propagation. Every major provider is anycast, so from one host you
+     * reach the nearest PoP and sample operators, not locations. The reliable
+     * propagation signal is still the authoritative-vs-recursive diff this report
+     * carries. Geo-distributed vantage points (regional DoH probes) are a documented
+     * roadmap item, not a claim made here.
+     */
+    public function checkAcrossProviders(string $host, RecordType $type, string $zone): PropagationReport
+    {
+        $probes = array_map(
+            static fn (PublicResolver $resolver): array => ['ip' => $resolver->ip, 'label' => $resolver->label],
+            PublicResolvers::all(),
+        );
+
+        return $this->report($host, $type, $zone, $probes);
+    }
+
+    /**
+     * Compare the authoritative set against a list of labelled probes.
+     *
+     * @param  list<array{ip: string, label: string|null}>  $probes
+     */
+    private function report(string $host, RecordType $type, string $zone, array $probes): PropagationReport
     {
         $authoritativeValues = $this->normalize($this->authoritativeValues($host, $type, $zone));
 
         $results = [];
         $allAgree = true;
 
-        foreach ($this->publicNameservers as $nameserver) {
-            $values = $this->normalize($this->publicValues($host, $type, $nameserver));
+        foreach ($probes as $probe) {
+            $values = $this->normalize($this->publicValues($host, $type, $probe['ip']));
             $agrees = $authoritativeValues !== [] && $values === $authoritativeValues;
             $allAgree = $allAgree && $agrees;
 
-            $results[] = new ResolverResult($nameserver, $values, $agrees);
+            $results[] = new ResolverResult($probe['ip'], $values, $agrees, $probe['label']);
         }
 
         return new PropagationReport($authoritativeValues, $results, $this->status($authoritativeValues, $allAgree));

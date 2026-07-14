@@ -6,7 +6,8 @@ namespace Cbox\Dns\Propagation;
 
 /**
  * One public resolver's view during a propagation check: which nameserver was
- * asked, the values it returned, and whether that set matches the authoritative one.
+ * asked, the provider's human `label` (null for a bare, unnamed IP panel), the
+ * values it returned, and whether that set matches the authoritative one.
  */
 final readonly class ResolverResult
 {
@@ -17,5 +18,6 @@ final readonly class ResolverResult
         public string $nameserver,
         public array $values,
         public bool $agrees,
+        public ?string $label = null,
     ) {}
 }
