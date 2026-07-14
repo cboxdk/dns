@@ -29,7 +29,49 @@ expect($dns->lookup('example.com', RecordType::A)->values())
     ->toBe(['93.184.216.34']);
 ```
 
-Each `stub()` call returns the fake, so calls chain.
+Each `stub()` call returns the fake, so calls chain. `stub()` also takes `ttl:` and
+`priority:` for records that need them; `stubRecords()` takes fully-formed
+`DnsRecord`s when you need per-record control (e.g. several MX hosts with different
+preferences).
+
+## Failures, strict mode, and assertions
+
+`stubFailure()` models a non-success RCODE (SERVFAIL, NXDOMAIN, …) so you can drive
+the code paths a bare empty answer cannot:
+
+```php
+use Cbox\Dns\Enums\Rcode;
+
+$fake->stubFailure('example.com', RecordType::A, Rcode::ServFail);
+```
+
+`strict()` makes an unstubbed query throw instead of returning an empty answer, so a
+fixture typo fails loudly. Every query is recorded — assert what was asked with
+`assertQueried()`, or inspect `queries()`:
+
+```php
+$fake->assertQueried('example.com', RecordType::A, '8.8.8.8');
+```
+
+## The `InteractsWithDns` trait
+
+Compose `Cbox\Dns\Testing\InteractsWithDns` into a test case to skip the
+boilerplate. It provides `fakeDns()` (a shared fake), `fakeDnsFacade()` (a `Dns`
+wired to it, with internal nameservers allowed for convenience), and `stubZone()`
+for the NS-chain setup:
+
+```php
+use Cbox\Dns\Testing\InteractsWithDns;
+
+uses(InteractsWithDns::class);
+
+it('verifies ownership', function () {
+    $this->stubZone('example.com', ['ns1.example.com' => '203.0.113.1'])
+        ->stub('_cbox-challenge.example.com', RecordType::TXT, ['token'], nameserver: '203.0.113.1');
+
+    expect($this->fakeDnsFacade()->verifyDomain('example.com', 'token'))->toBeTrue();
+});
+```
 
 ## Modelling authoritative vs. recursive
 

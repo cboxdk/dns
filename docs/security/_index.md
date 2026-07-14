@@ -25,7 +25,25 @@ Domain [verification](../core-concepts/domain-verification.md) and
 [propagation](../core-concepts/propagation.md) read from a zone's **authoritative
 nameservers**, not a recursive cache. A recursive cache can be stale or, on a shared
 resolver, poisoned — so trusting it for an ownership decision is unsafe. Verification
-is **deny-by-default**: any failure or non-exact match returns `false`.
+is **deny-by-default**: any failure or non-exact match is `false`, and the token
+compare is constant-time (`hash_equals`).
+
+### Response-spoofing resistance
+
+The socket resolver accepts a UDP answer only when its transaction ID **and** echoed
+question (name + type) match the query; a mismatch is rejected as malformed rather
+than trusted. Optional 0x20 mixed-case encoding adds further entropy where the
+server preserves case. This is what makes a direct authoritative read trustworthy
+against off-path spoofing.
+
+### SSRF-safe nameserver discovery
+
+A domain owner controls their own NS and glue records, so the authoritative
+resolver treats NS-derived addresses as untrusted: by default it queries **only
+globally-routable public IPs** (RFC1918, loopback, link-local/metadata, and other
+reserved space are refused) and caps the NS fan-out. `allowNonPublicNameservers`
+opts into LAN/internal servers when you deliberately want to check one. Nameserver
+IPs you pass explicitly are never filtered — only ones discovered from DNS.
 
 ### DNSSEC validation, deny-by-default
 

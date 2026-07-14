@@ -38,6 +38,8 @@ $response = $dns->lookup('example.com', RecordType::A);
 $response->values();                 // ['93.184.216.34', ...]
 $response->contains('93.184.216.34');
 $response->isEmpty();
+$response->rcode;                    // Rcode::NoError | NxDomain | ServFail | …
+$response->isNxDomain();             // the name provably does not exist
 
 foreach ($response->records as $record) {
     // $record->type, $record->name, $record->value, $record->ttl, $record->priority
@@ -45,7 +47,37 @@ foreach ($response->records as $record) {
 ```
 
 `RecordType` covers `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `SOA`, `PTR`, `CAA`,
-`SRV`, and the DNSSEC types (`DS`, `RRSIG`, `DNSKEY`, `NSEC`, `NSEC3`).
+`SRV`, `NAPTR`, `TLSA`, `SVCB`, `HTTPS`, and the DNSSEC types (`DS`, `RRSIG`,
+`DNSKEY`, `NSEC`, `NSEC3`).
+
+## Typed record data — no string parsing
+
+Call `data()` on a record (or a whole response) for a typed value object, so you
+read fields instead of splitting `value` strings or touching raw bytes:
+
+```php
+foreach ($dns->lookup('example.com', RecordType::MX)->data() as $mx) {
+    $mx->preference;   // 10
+    $mx->exchange;     // 'mail.example.com'
+}
+
+$soa = $dns->lookup('example.com', RecordType::SOA)->data()[0];
+$soa->serial;          // 2024010101
+$soa->refresh;
+
+// SVCB/HTTPS SvcParams are fully parsed — ALPN, port, address hints, ECH:
+foreach ($dns->lookup('cloudflare.com', RecordType::HTTPS)->data() as $https) {
+    $https->alpn;      // ['h3', 'h2']
+    $https->ipv4hint;  // ['104.16.132.229', ...]
+    $https->port;
+}
+```
+
+Each type maps to an object — `A`/`AAAA` → `Address`, `CNAME`/`NS`/`PTR` → `Name`,
+`TXT` → `Txt`, `MX` → `Mx`, `SRV` → `Srv`, `SOA` → `Soa`, `CAA` → `Caa`, `NAPTR` →
+`Naptr`, `TLSA` → `Tlsa`, `SVCB`/`HTTPS` → `Svcb`. The DNSSEC types are parsed and
+validated by the [DNSSEC module](dnssec/_index.md) (`$dns->dnssec()`), so
+`data()` returns `null` for them.
 
 ## Verify domain ownership
 

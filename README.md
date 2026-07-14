@@ -121,22 +121,57 @@ foreach ($report->findings as $finding) {
 ## Features
 
 - **Zero-dependency socket resolver** — DNS over UDP with automatic TCP retry on
-  truncation (RFC 1035). Target any nameserver; recursion toggleable.
+  truncation (RFC 1035) and a bounded UDP retry. Target any nameserver; recursion
+  toggleable. Every response is checked against the query's transaction ID **and**
+  echoed question before it is trusted (optional 0x20 mixed-case hardening), so an
+  off-path spoofed answer is rejected. The `RCODE` is surfaced, so NXDOMAIN, NODATA,
+  and SERVFAIL are distinguishable — not collapsed into "empty". IPv6 nameservers
+  and internationalized (IDN/punycode) names are handled.
 - **DNS-over-HTTPS (DoH)** — the Google/Cloudflare JSON API, behind the same
-  `Resolver` contract, with an injectable fetcher (no network in tests).
+  `Resolver` contract, with an injectable fetcher (no network in tests). Refuses
+  authoritative/per-nameserver queries it cannot honestly serve.
 - **Authoritative resolver** — discovers a zone's NS set, resolves it to IPs, and
-  reads records directly from the source, bypassing every recursive cache.
+  reads records directly from the source, bypassing every recursive cache. The
+  NS set is attacker-influenced, so **only public addresses are queried by default**
+  (SSRF-safe; `allowNonPublicNameservers` opts into LAN/internal servers), and the
+  fan-out is capped.
 - **Domain-ownership verification** — TXT challenge read authoritatively,
-  deny-by-default.
+  constant-time (`hash_equals`) match, deny-by-default. The challenge prefix is
+  configurable (no forced cbox-branded record).
 - **Propagation checking** — authoritative record set vs. a panel of public
-  recursive resolvers, plus a named 15-provider registry.
+  recursive resolvers (polled **concurrently** under one timeout), plus a named
+  15-entry / 11-operator registry.
 - **DNSSEC chain validation** — root-anchored, RRSIG via OpenSSL, Ed25519 via
   libsodium, DS links, NSEC/NSEC3 denial-of-existence, wildcard proofs, in-bailiwick
   enforcement. Deny-by-default.
 - **Diagnostics engine** — delegation, nameservers, SOA, MX/FCrDNS, SPF, DMARC,
   DKIM, CAA, DNSSEC, and propagation checks, aggregated into a structured report.
+  NS discovery is memoised across the run.
+- **Typed records, no raw parsing** — A, AAAA, CNAME, MX, TXT, NS, SOA, PTR, CAA,
+  SRV, NAPTR, CERT, LOC, SSHFP, SMIMEA, OPENPGPKEY, URI, TLSA, SVCB, HTTPS, and the
+  DNSSEC set. Call `$record->data()` for a typed value object (`Address`, `Mx`,
+  `Srv`, `Soa`, `Caa`, `Naptr`, `Cert`, `Loc`, `Sshfp`, `Smimea`, `Openpgpkey`,
+  `Uri`, `Tlsa`, `Svcb`) and read `->preference`, `->serial`, `->alpn`, `->ipv4hint`,
+  `->latitude` directly — SVCB/HTTPS SvcParams (ALPN, port, IPv4/IPv6 hints, ECH,
+  mandatory) are fully parsed, never a hex blob.
+- **Known TXT policies** — a TXT record's `->data()` (`Txt`) parses SPF, DKIM, and
+  DMARC on demand: `$txt->spf()`, `$txt->dkim()`, `$txt->dmarc()` return typed
+  `SpfPolicy` / `DkimKey` / `DmarcPolicy` objects (mechanisms, key state, policy,
+  reporting URIs, alignment) or null when the text isn't that policy.
+- **CNAME following & SPF expansion** — `$dns->follow('www.example.com', RecordType::A)`
+  follows the CNAME chain and returns the traversed hops and canonical name;
+  `$dns->spf('example.com')` recursively expands SPF (`include:` / `redirect=` / `a`
+  / `mx`) into the complete flattened `allIp4()` / `allIp6()` endpoint list plus the
+  include tree. Both are loop-safe and bounded (SPF enforces the RFC 7208 10-lookup
+  limit).
+- **Delegation tracing** — `$dns->trace('www.example.com')` walks the delegation
+  from the root down (`dig +trace`-style), recording each zone cut, which nameserver
+  delegated it, and the glue; `$dns->traceReverse('8.8.8.8')` traces the reverse
+  (in-addr.arpa) chain for CIDR/reverse-zone delegation. Loop-safe by construction.
 - **Testable by construction** — everything resolves through the `Resolver`
-  contract; `Cbox\Dns\Testing\FakeResolver` drives the entire library offline.
+  contract; `Cbox\Dns\Testing\FakeResolver` (with per-nameserver stubs, RCODE stubs,
+  query recording, and strict mode) and the `InteractsWithDns` trait drive the
+  entire library — including the DNSSEC chain walk — offline.
 
 ## Requirements
 
@@ -146,6 +181,8 @@ foreach ($report->findings as $finding) {
   and Ed25519 signature verification respectively). Both ship with a stock PHP
   build; they are not hard Composer constraints because the resolver, verification,
   propagation, and non-DNSSEC diagnostics work without them.
+- **`ext-intl`** — needed only to look up an internationalized (IDN) domain name;
+  an ASCII name works without it. Suggested, not required.
 
 No Laravel, no framework. See [`docs/requirements.md`](docs/requirements.md).
 

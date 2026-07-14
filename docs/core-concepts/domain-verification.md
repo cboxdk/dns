@@ -29,8 +29,29 @@ $dns->challengeHost('example.com');   // "_cbox-challenge.example.com"
 $dns->verifyDomain('example.com', 'my-verification-token');   // bool
 ```
 
-The challenge host is `_cbox-challenge.` prefixed to the normalized domain. Publish
-the token as a TXT record there.
+The challenge host is the prefix (default `_cbox-challenge`) prefixed to the
+normalized domain. Publish the token as a TXT record there.
+
+### Configuring the prefix
+
+The default label is `_cbox-challenge`, but you are not forced to publish a
+cbox-branded record — pass your own prefix to the facade:
+
+```php
+$dns = new Dns(challengePrefix: '_myapp-challenge');
+
+$dns->challengeHost('example.com');   // "_myapp-challenge.example.com"
+```
+
+### Verifying against an internal nameserver
+
+Authoritative discovery only queries public nameserver IPs by default (an
+SSRF safeguard, since a zone owner controls their own NS records). If you legitimately
+need to verify a domain served by a LAN/internal nameserver, opt in:
+
+```php
+$dns = new Dns(allowNonPublicNameservers: true);
+```
 
 ## Deny-by-default
 
@@ -42,7 +63,8 @@ the token as a TXT record there.
 - a record whose value does not match the token exactly (trimmed).
 
 It returns `true` only when the authoritative nameservers serve a TXT record whose
-trimmed value equals the trimmed token. There is no partial or fuzzy match.
+trimmed value equals the trimmed token. The comparison is constant-time
+(`hash_equals`). There is no partial or fuzzy match.
 
 ## How it reads authoritatively
 

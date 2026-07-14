@@ -16,3 +16,7 @@ capabilities composed on top.
   checks.
 - **[Propagation](propagation.md)** — authoritative-vs-recursive comparison and its
   honest scope.
+- **[Chain resolution](resolution.md)** — follow CNAME chains and expand SPF
+  include/redirect trees to a complete endpoint list; loop-safe and bounded.
+- **[Delegation tracing](tracing.md)** — walk a name's delegation from the root
+  down, and the reverse chain for an IP; loop-safe like `dig +trace`.
