@@ -79,11 +79,26 @@ final class DnssecValidator
 
     private function validatePresent(string $host, RecordType $type, DnsResponse $response): ValidationResult
     {
+        // Every answer record must be owned by the queried name — a MITM cannot
+        // splice in an RRset owned by some other name it happens to hold a key for.
+        foreach ($response->records as $record) {
+            if ($this->normalize($record->name) !== $host) {
+                return ValidationResult::bogus($host, 'an answer record is not owned by the queried name');
+            }
+        }
+
         $rrsigs = $response->answerOfType(RecordType::RRSIG);
         $zone = $this->signerFor($rrsigs, $type);
 
         if ($zone === null) {
             return ValidationResult::bogus($host, "no RRSIG covers the {$type->value} RRset");
+        }
+
+        // RFC 4035 §5.3.1: the signer zone must contain the RRset, i.e. be an
+        // in-bailiwick (label-aligned) ancestor of the queried name. Without this
+        // any zone whose own chain validates could forge another zone's records.
+        if (! $this->inBailiwick($zone, $host)) {
+            return ValidationResult::bogus($host, "RRSIG signer {$this->label($zone)} is not in-bailiwick for {$host}");
         }
 
         $chain = $this->walk($zone);
@@ -92,11 +107,21 @@ final class DnssecValidator
             return new ValidationResult($chain->status, $host, $chain->reason);
         }
 
-        if ($this->verifyRrset($type, $response->records, $rrsigs, $chain->dnskeys, $zone)) {
-            return ValidationResult::secure($host, "{$type->value} RRset verified against zone {$zone}");
+        $rrsig = $this->verifyingRrsig($type, $response->records, $rrsigs, $chain->dnskeys, $zone);
+
+        if ($rrsig === null) {
+            return ValidationResult::bogus($host, "no valid RRSIG over the {$type->value} RRset");
         }
 
-        return ValidationResult::bogus($host, "no valid RRSIG over the {$type->value} RRset");
+        // RFC 4035 §5.3.4: a signature whose label count is below the query owner's
+        // was produced by a wildcard. The answer is only trustworthy with an
+        // authenticated NSEC/NSEC3 proving the QNAME has no closer (explicit) match.
+        if ($rrsig->labels < $this->labelCount($host)
+            && ! $this->wildcardNoCloserMatch($host, $rrsig->labels, $response, $chain->dnskeys, $zone)) {
+            return ValidationResult::bogus($host, 'wildcard answer lacks an authenticated no-closer-match proof');
+        }
+
+        return ValidationResult::secure($host, "{$type->value} RRset verified against zone {$zone}");
     }
 
     private function validateAbsent(string $host, RecordType $type, DnsResponse $response): ValidationResult
@@ -106,6 +131,12 @@ final class DnssecValidator
 
         if ($zone === null) {
             return ValidationResult::bogus($host, 'empty answer carried no signatures to validate absence');
+        }
+
+        // The zone proving the denial must be an ancestor of the queried name; a
+        // denial signed by an unrelated zone proves nothing about this name.
+        if (! $this->inBailiwick($zone, $host)) {
+            return ValidationResult::bogus($host, "denial signer {$this->label($zone)} is not in-bailiwick for {$host}");
         }
 
         $chain = $this->walk($zone);
@@ -279,6 +310,20 @@ final class DnssecValidator
      */
     private function verifyRrsetWithKeys(RecordType $type, array $rrset, array $rrsigRecords, array $keys, string $expectedSigner): bool
     {
+        return $this->verifyingRrsig($type, $rrset, $rrsigRecords, $keys, $expectedSigner) !== null;
+    }
+
+    /**
+     * The single RRSIG that verifies the RRset with one of `$keys`, or null when
+     * none does. Exposes the winning signature so callers can inspect its label
+     * count (wildcard detection). Deny-by-default: no valid signature → null.
+     *
+     * @param  list<DnsRecord>  $rrset
+     * @param  list<DnsRecord>  $rrsigRecords
+     * @param  list<Dnskey>  $keys
+     */
+    private function verifyingRrsig(RecordType $type, array $rrset, array $rrsigRecords, array $keys, string $expectedSigner): ?Rrsig
+    {
         foreach ($rrsigRecords as $record) {
             if ($record->raw === null) {
                 continue;
@@ -296,12 +341,34 @@ final class DnssecValidator
                 }
 
                 if ($this->signatureVerifier->verify($rrsig, $type, $rrset, $key, $expectedSigner)) {
-                    return true;
+                    return $rrsig;
                 }
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * Verify the wildcard "no closer match" proof (RFC 4035 §5.3.4): the authority
+     * section must carry an authenticated, in-bailiwick NSEC/NSEC3 showing the
+     * QNAME has no explicit match, so the wildcard expansion was legitimate.
+     *
+     * @param  list<Dnskey>  $keys
+     */
+    private function wildcardNoCloserMatch(string $host, int $encloserLabels, DnsResponse $response, array $keys, string $zone): bool
+    {
+        $nsec = $response->authorityOfType(RecordType::NSEC);
+        $nsec3 = $response->authorityOfType(RecordType::NSEC3);
+        $rrsigs = $response->authorityOfType(RecordType::RRSIG);
+
+        // The proof RRsets must be validly signed by the (already in-bailiwick) zone.
+        if (! $this->denialAuthoritySigned($nsec, $nsec3, $rrsigs, $keys, $zone)) {
+            return false;
+        }
+
+        return $this->denial->nsecProvesNoCloserMatch($host, $nsec)
+            || $this->denial->nsec3ProvesNoCloserMatch($host, $encloserLabels, $nsec3);
     }
 
     /**
@@ -408,6 +475,31 @@ final class DnssecValidator
         }
 
         return $chain;
+    }
+
+    /**
+     * True when `$signer` is a label-aligned suffix of `$owner` — i.e. the signer
+     * zone is `$owner` itself or one of its ancestors (RFC 4035 §5.3.1). Both are
+     * normalized first; the comparison is on whole labels, so `evil.com` is NOT
+     * in-bailiwick for `notevil.com`, and the root ('') is in-bailiwick for all.
+     */
+    private function inBailiwick(string $signer, string $owner): bool
+    {
+        $signer = $this->normalize($signer);
+        $owner = $this->normalize($owner);
+
+        if ($signer === '' || $signer === $owner) {
+            return true;
+        }
+
+        return str_ends_with($owner, '.'.$signer);
+    }
+
+    private function labelCount(string $name): int
+    {
+        $name = $this->normalize($name);
+
+        return $name === '' ? 0 : count(explode('.', $name));
     }
 
     private function normalize(string $name): string

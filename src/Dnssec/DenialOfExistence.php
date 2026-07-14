@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Dns\Dnssec;
 
+use Cbox\Dns\Dnssec\Exceptions\ExcessiveNsec3Iterations;
 use Cbox\Dns\Dnssec\Records\Nsec;
 use Cbox\Dns\Dnssec\Records\Nsec3;
 use Cbox\Dns\Dnssec\Support\Base32Hex;
@@ -24,11 +25,20 @@ use Cbox\Dns\ValueObjects\DnsRecord;
  */
 final class DenialOfExistence
 {
+    /**
+     * The largest NSEC3 iteration count we are willing to hash (RFC 9276). The RFC
+     * recommends zero additional iterations; we accept a small margin and treat
+     * anything beyond it as insecure, refusing to compute the hash at all.
+     */
+    public const int MAX_NSEC3_ITERATIONS = 100;
+
     // --- NSEC ---------------------------------------------------------------
 
     /**
      * Prove `$qname` has no record of `$type` (a NODATA answer): a matching NSEC
-     * exists at `$qname` whose bitmap lists neither `$type` nor CNAME.
+     * exists at `$qname` whose bitmap lists neither `$type` nor CNAME. A parent-
+     * side delegation NSEC (NS set without SOA) is rejected — it is served by the
+     * parent and cannot speak to the child's contents (RFC 4035 §5.4).
      *
      * @param  list<DnsRecord>  $nsecRecords
      */
@@ -37,7 +47,8 @@ final class DenialOfExistence
         foreach ($this->nsecs($nsecRecords) as [$owner, $nsec]) {
             if (CanonicalName::compare($owner, $qname) === 0
                 && ! $nsec->hasType($type)
-                && ! $nsec->hasType(RecordType::CNAME)) {
+                && ! $nsec->hasType(RecordType::CNAME)
+                && ! $this->isDelegationNsec($nsec)) {
                 return true;
             }
         }
@@ -80,6 +91,24 @@ final class DenialOfExistence
         return false;
     }
 
+    /**
+     * Prove there is no closer match for `$qname` than the wildcard that
+     * synthesised the answer (RFC 4035 §5.3.4): some NSEC covers `$qname`, so the
+     * exact name does not exist and the wildcard expansion was legitimate.
+     *
+     * @param  list<DnsRecord>  $nsecRecords
+     */
+    public function nsecProvesNoCloserMatch(string $qname, array $nsecRecords): bool
+    {
+        foreach ($this->nsecs($nsecRecords) as [$owner, $nsec]) {
+            if ($this->nsecCovers($owner, $nsec->nextDomainName, $qname)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // --- NSEC3 --------------------------------------------------------------
 
     /**
@@ -90,14 +119,18 @@ final class DenialOfExistence
      */
     public function nsec3ProvesNoData(string $qname, RecordType $type, array $nsec3Records): bool
     {
-        foreach ($this->nsec3s($nsec3Records) as [$ownerHash, $nsec3]) {
-            $hash = $this->nsec3Hash($qname, $nsec3->iterations, $nsec3->salt);
+        try {
+            foreach ($this->nsec3s($nsec3Records) as [$ownerHash, $nsec3]) {
+                $hash = $this->nsec3Hash($qname, $nsec3->iterations, $nsec3->salt);
 
-            if (hash_equals($ownerHash, $hash)
-                && ! $nsec3->hasType($type)
-                && ! $nsec3->hasType(RecordType::CNAME)) {
-                return true;
+                if (hash_equals($ownerHash, $hash)
+                    && ! $nsec3->hasType($type)
+                    && ! $nsec3->hasType(RecordType::CNAME)) {
+                    return true;
+                }
             }
+        } catch (ExcessiveNsec3Iterations) {
+            return false; // over-cap iterations → refuse the proof (RFC 9276)
         }
 
         return false;
@@ -122,23 +155,64 @@ final class DenialOfExistence
 
         $ancestors = $this->ancestors($qname);
 
-        // Closest encloser: the longest proper ancestor of qname with a matching
-        // NSEC3. Index 0 is qname itself (absent), so start at its parent.
-        for ($i = 1; $i < count($ancestors); $i++) {
-            $encloser = $ancestors[$i];
+        try {
+            // Closest encloser: the longest proper ancestor of qname with a matching
+            // NSEC3. Index 0 is qname itself (absent), so start at its parent.
+            for ($i = 1; $i < count($ancestors); $i++) {
+                $encloser = $ancestors[$i];
 
-            if (! $this->nsec3Matches($nsec3s, $encloser, $iterations, $salt)) {
-                continue;
+                if (! $this->nsec3Matches($nsec3s, $encloser, $iterations, $salt)) {
+                    continue;
+                }
+
+                $nextCloser = $ancestors[$i - 1];
+                $wildcard = $encloser === '' ? '*' : '*.'.$encloser;
+
+                return $this->nsec3Covers($nsec3s, $nextCloser, $iterations, $salt)
+                    && $this->nsec3Covers($nsec3s, $wildcard, $iterations, $salt);
             }
-
-            $nextCloser = $ancestors[$i - 1];
-            $wildcard = $encloser === '' ? '*' : '*.'.$encloser;
-
-            return $this->nsec3Covers($nsec3s, $nextCloser, $iterations, $salt)
-                && $this->nsec3Covers($nsec3s, $wildcard, $iterations, $salt);
+        } catch (ExcessiveNsec3Iterations) {
+            return false; // over-cap iterations → refuse the proof (RFC 9276)
         }
 
         return false;
+    }
+
+    /**
+     * Prove there is no closer match for `$qname` than the wildcard that
+     * synthesised the answer, via NSEC3 (RFC 5155 §8.8): a matching NSEC3 for the
+     * closest encloser (the `$encloserLabels`-label suffix of `$qname`) and a
+     * covering NSEC3 for the next-closer name.
+     *
+     * @param  list<DnsRecord>  $nsec3Records
+     */
+    public function nsec3ProvesNoCloserMatch(string $qname, int $encloserLabels, array $nsec3Records): bool
+    {
+        $nsec3s = $this->nsec3s($nsec3Records);
+
+        if ($nsec3s === []) {
+            return false;
+        }
+
+        [$iterations, $salt] = [$nsec3s[0][1]->iterations, $nsec3s[0][1]->salt];
+
+        $labels = CanonicalName::labels($qname);
+        $count = count($labels);
+
+        // The wildcard encloser must be a proper ancestor of the query name.
+        if ($encloserLabels >= $count) {
+            return false;
+        }
+
+        $encloser = implode('.', array_slice($labels, $count - $encloserLabels));
+        $nextCloser = implode('.', array_slice($labels, $count - $encloserLabels - 1));
+
+        try {
+            return $this->nsec3Matches($nsec3s, $encloser, $iterations, $salt)
+                && $this->nsec3Covers($nsec3s, $nextCloser, $iterations, $salt);
+        } catch (ExcessiveNsec3Iterations) {
+            return false; // over-cap iterations → refuse the proof (RFC 9276)
+        }
     }
 
     /**
@@ -163,32 +237,56 @@ final class DenialOfExistence
 
         $nsec3s = $this->nsec3s($nsec3Records);
 
-        foreach ($nsec3s as [$ownerHash, $nsec3]) {
-            $hash = $this->nsec3Hash($child, $nsec3->iterations, $nsec3->salt);
+        try {
+            foreach ($nsec3s as [$ownerHash, $nsec3]) {
+                $hash = $this->nsec3Hash($child, $nsec3->iterations, $nsec3->salt);
 
-            // Matching NSEC3 with no DS bit: provably no DS at an existing name.
-            if (hash_equals($ownerHash, $hash)
-                && ! $nsec3->hasType(RecordType::DS)
-                && ! $nsec3->hasType(RecordType::SOA)) {
-                return true;
-            }
+                // Matching NSEC3 with no DS bit: provably no DS at an existing name.
+                if (hash_equals($ownerHash, $hash)
+                    && ! $nsec3->hasType(RecordType::DS)
+                    && ! $nsec3->hasType(RecordType::SOA)) {
+                    return true;
+                }
 
-            // Opt-out covering NSEC3: the delegation may be unsigned.
-            if ($nsec3->isOptOut()
-                && $this->nsec3CoversHash($ownerHash, $nsec3->nextHashedOwner, $hash)) {
-                return true;
+                // Opt-out covering NSEC3: the delegation may be unsigned.
+                if ($nsec3->isOptOut()
+                    && $this->nsec3CoversHash($ownerHash, $nsec3->nextHashedOwner, $hash)) {
+                    return true;
+                }
             }
+        } catch (ExcessiveNsec3Iterations) {
+            return false; // over-cap iterations → refuse the proof (RFC 9276)
         }
 
         return false;
     }
 
     /**
+     * A parent-side delegation NSEC — NS present, SOA absent — which lives at the
+     * zone cut and therefore cannot authoritatively describe the delegated child's
+     * own RRsets (RFC 4035 §5.4). The zone apex NSEC (NS *and* SOA) is not one.
+     */
+    private function isDelegationNsec(Nsec $nsec): bool
+    {
+        return $nsec->hasType(RecordType::NS) && ! $nsec->hasType(RecordType::SOA);
+    }
+
+    /**
      * The NSEC3 hash of a name (RFC 5155 §5): iterated SHA-1 over the canonical
      * wire name concatenated with the salt.
+     *
+     * An iteration count above {@see MAX_NSEC3_ITERATIONS} is refused BEFORE any
+     * hashing (RFC 9276): honouring an attacker-chosen count up to 65535 is a
+     * CPU-amplification vector, so the proof is treated as bogus, not paid for.
+     *
+     * @throws ExcessiveNsec3Iterations
      */
     public function nsec3Hash(string $name, int $iterations, string $salt): string
     {
+        if ($iterations > self::MAX_NSEC3_ITERATIONS) {
+            throw ExcessiveNsec3Iterations::make($iterations, self::MAX_NSEC3_ITERATIONS);
+        }
+
         $hash = hash('sha1', WireName::canonical($name).$salt, binary: true);
 
         for ($i = 0; $i < $iterations; $i++) {
