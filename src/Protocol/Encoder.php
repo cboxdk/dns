@@ -14,7 +14,7 @@ use Cbox\Dns\Exceptions\InvalidName;
  * the DO bit is appended (RFC 6891 / RFC 3225) so the server returns the DNSSEC
  * records (RRSIG/DNSKEY/DS/NSEC/NSEC3) needed for validation.
  */
-final class Encoder
+class Encoder
 {
     public function query(string $host, RecordType $type, bool $recursion = true, ?int $id = null, bool $dnssec = false): string
     {
@@ -45,6 +45,12 @@ final class Encoder
 
     /**
      * Encode a domain name as length-prefixed labels terminated by the root.
+     *
+     * Rejects malformed names at the trust boundary rather than emitting a query
+     * for the wrong name: an embedded NUL (or other illegal wire octet) is refused,
+     * an empty interior label (`a..b`) — which would prematurely terminate the wire
+     * name — is refused, and the total encoded length is capped at 255 octets
+     * (RFC 1035 §2.3.4) as well as the 63-octet per-label limit.
      */
     public function qname(string $host): string
     {
@@ -55,14 +61,28 @@ final class Encoder
             foreach (explode('.', $host) as $label) {
                 $length = strlen($label);
 
+                if ($length === 0) {
+                    throw InvalidName::make($host, 'the name has an empty label');
+                }
+
                 if ($length > 63) {
-                    throw InvalidName::make($host);
+                    throw InvalidName::make($host, 'a label exceeds 63 octets');
+                }
+
+                if (str_contains($label, "\0")) {
+                    throw InvalidName::make($host, 'a label contains an illegal NUL octet');
                 }
 
                 $encoded .= chr($length).$label;
             }
         }
 
-        return $encoded."\0"; // root label terminates the name
+        $encoded .= "\0"; // root label terminates the name
+
+        if (strlen($encoded) > 255) {
+            throw InvalidName::make($host, 'the encoded name exceeds 255 octets');
+        }
+
+        return $encoded;
     }
 }

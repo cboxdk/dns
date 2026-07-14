@@ -11,7 +11,7 @@ use Cbox\Dns\Exceptions\MalformedMessage;
  * wire format — fixed-width integers and, critically, compressed domain names
  * (0xC0 pointers back into the message) — so the decoder stays readable.
  */
-final class Reader
+class Reader
 {
     private int $offset = 0;
 
@@ -78,7 +78,15 @@ final class Reader
 
             // Compression pointer: top two bits set → 14-bit offset follows.
             if (($length & 0xC0) === 0xC0) {
+                $pointerAt = $this->offset;
                 $pointer = (($length & 0x3F) << 8) | ord($this->at($this->offset + 1));
+
+                // A pointer must reference a PRIOR occurrence (RFC 1035 §4.1.4).
+                // Rejecting forward/self pointers removes the only remaining way to
+                // build a loop or walk the cursor forward under attacker control.
+                if ($pointer >= $pointerAt) {
+                    throw MalformedMessage::make('domain name compression pointer does not point backwards');
+                }
 
                 if (! $jumped) {
                     $savedOffset = $this->offset + 2;
