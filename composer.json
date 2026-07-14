@@ -1,0 +1,41 @@
+{
+    "name": "cboxdk/dns",
+    "description": "Zero-dependency raw PHP DNS resolver, domain-ownership verification, and intoDNS/MxToolbox-style diagnostics. Queries authoritative nameservers directly over sockets — never trusts the recursive cache for ownership checks.",
+    "keywords": ["php", "dns", "resolver", "domain-verification", "dns-diagnostics", "dig", "mxtoolbox", "intodns"],
+    "homepage": "https://github.com/cboxdk/dns",
+    "license": "MIT",
+    "authors": [
+        { "name": "Sylvester Damgaard", "email": "sn@cbox.dk", "role": "Developer" }
+    ],
+    "require": {
+        "php": "^8.4",
+        "ext-sockets": "*"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.18",
+        "pestphp/pest": "^3.5 || ^4.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "bin": [
+        "bin/check-licenses.php",
+        "bin/generate-sbom.php"
+    ],
+    "autoload": {
+        "psr-4": { "Cbox\\Dns\\": "src" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Cbox\\Dns\\Tests\\": "tests" }
+    },
+    "scripts": {
+        "lint": "pint --test",
+        "analyse": "phpstan analyse --no-progress --memory-limit=1G",
+        "test": "pest",
+        "license-check": "@php bin/check-licenses.php",
+        "sbom": "@php bin/generate-sbom.php",
+        "qa": ["@lint", "@analyse", "@test", "@license-check", "@composer audit"]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": { "pestphp/pest-plugin": true }
+    }
+}
