@@ -16,20 +16,31 @@ use Cbox\Dns\Resolvers\AuthoritativeResolver;
  * Deny-by-default: any resolution failure, or a challenge record that is absent
  * or does not match the expected token exactly, yields `false`.
  */
-final class DomainVerifier
+class DomainVerifier
 {
-    private const string CHALLENGE_PREFIX = '_cbox-challenge.';
+    private const string DEFAULT_CHALLENGE_PREFIX = '_cbox-challenge';
 
+    private readonly string $challengePrefix;
+
+    /**
+     * @param  string  $challengePrefix  the label prefixed to the domain for the
+     *                                   challenge host — configurable so a consumer
+     *                                   is not forced to publish a cbox-branded TXT
+     *                                   record (e.g. `_acme-challenge`, `_myapp`).
+     */
     public function __construct(
         private readonly AuthoritativeResolver $resolver,
-    ) {}
+        string $challengePrefix = self::DEFAULT_CHALLENGE_PREFIX,
+    ) {
+        $this->challengePrefix = rtrim($challengePrefix, '.');
+    }
 
     /**
      * The fully-qualified host at which the verification TXT record must be published.
      */
     public function challengeHost(string $domain): string
     {
-        return self::CHALLENGE_PREFIX.$this->normalize($domain);
+        return $this->challengePrefix.'.'.$this->normalize($domain);
     }
 
     /**
@@ -52,7 +63,7 @@ final class DomainVerifier
         }
 
         foreach ($response->records as $record) {
-            if (trim($record->value) === $token) {
+            if (hash_equals($token, trim($record->value))) {
                 return true;
             }
         }
