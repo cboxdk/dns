@@ -9,6 +9,7 @@ use Cbox\Dns\Diagnostics\DiagnosticContext;
 use Cbox\Dns\Diagnostics\Finding;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
+use Cbox\Dns\ValueObjects\Soa;
 
 /**
  * Validates the zone's SOA (RFC 1035 §3.3.13, RFC 1912 §2.2). It reads the SOA
@@ -16,10 +17,8 @@ use Cbox\Dns\Exceptions\DnsException;
  * confirm every server serves the SAME serial (a divergence means a zone transfer
  * has not completed). It also checks that MNAME is one of the zone's listed
  * nameservers and that the refresh/retry/expire/minimum timers are internally sane.
- *
- * @phpstan-type SoaTimers array{mname: string, serial: int, refresh: int, retry: int, expire: int, minimum: int}
  */
-final class SoaCheck implements Check
+class SoaCheck implements Check
 {
     private const string CATEGORY = 'SOA';
 
@@ -51,7 +50,7 @@ final class SoaCheck implements Check
             )];
         }
 
-        $primary = $this->parse((string) array_values($soaByAddress)[0]);
+        $primary = Soa::fromPresentation((string) array_values($soaByAddress)[0]);
 
         if ($primary === null) {
             return [Finding::error(
@@ -63,7 +62,7 @@ final class SoaCheck implements Check
         }
 
         return [
-            $this->checkMname($primary['mname'], $nameservers),
+            $this->checkMname($primary->mname, $nameservers),
             ...$this->checkTimers($primary),
             $this->checkSerialAgreement($soaByAddress),
         ];
@@ -117,42 +116,50 @@ final class SoaCheck implements Check
     }
 
     /**
-     * @param  array{mname: string, serial: int, refresh: int, retry: int, expire: int, minimum: int}  $soa
      * @return list<Finding>
      */
-    private function checkTimers(array $soa): array
+    private function checkTimers(Soa $soa): array
     {
+        $context = [
+            'mname' => $soa->mname,
+            'serial' => $soa->serial,
+            'refresh' => $soa->refresh,
+            'retry' => $soa->retry,
+            'expire' => $soa->expire,
+            'minimum' => $soa->minimum,
+        ];
+
         $findings = [];
 
-        if ($soa['retry'] >= $soa['refresh']) {
+        if ($soa->retry >= $soa->refresh) {
             $findings[] = Finding::warning(
                 self::CATEGORY,
                 'soa.timers',
-                "SOA retry ({$soa['retry']}s) should be less than refresh ({$soa['refresh']}s).",
-                $soa,
+                "SOA retry ({$soa->retry}s) should be less than refresh ({$soa->refresh}s).",
+                $context,
             );
         }
 
-        if ($soa['expire'] < $soa['refresh']) {
+        if ($soa->expire < $soa->refresh) {
             $findings[] = Finding::warning(
                 self::CATEGORY,
                 'soa.timers',
-                "SOA expire ({$soa['expire']}s) should be at least the refresh interval ({$soa['refresh']}s).",
-                $soa,
+                "SOA expire ({$soa->expire}s) should be at least the refresh interval ({$soa->refresh}s).",
+                $context,
             );
         }
 
-        if ($soa['minimum'] < self::MINIMUM_FLOOR || $soa['minimum'] > self::MINIMUM_CEILING) {
+        if ($soa->minimum < self::MINIMUM_FLOOR || $soa->minimum > self::MINIMUM_CEILING) {
             $findings[] = Finding::warning(
                 self::CATEGORY,
                 'soa.timers',
-                "SOA minimum ({$soa['minimum']}s) is outside the sane ".self::MINIMUM_FLOOR.'–'.self::MINIMUM_CEILING.'s range.',
-                $soa,
+                "SOA minimum ({$soa->minimum}s) is outside the sane ".self::MINIMUM_FLOOR.'–'.self::MINIMUM_CEILING.'s range.',
+                $context,
             );
         }
 
         if ($findings === []) {
-            $findings[] = Finding::info(self::CATEGORY, 'soa.timers', 'SOA timers (refresh/retry/expire/minimum) are internally consistent.', $soa);
+            $findings[] = Finding::info(self::CATEGORY, 'soa.timers', 'SOA timers (refresh/retry/expire/minimum) are internally consistent.', $context);
         }
 
         return $findings;
@@ -166,8 +173,7 @@ final class SoaCheck implements Check
         $serials = [];
 
         foreach ($soaByAddress as $address => $value) {
-            $parsed = $this->parse($value);
-            $serials[$address] = $parsed['serial'] ?? null;
+            $serials[$address] = Soa::fromPresentation($value)?->serial;
         }
 
         if (count(array_unique($serials, SORT_REGULAR)) > 1) {
@@ -185,32 +191,5 @@ final class SoaCheck implements Check
             'All authoritative nameservers agree on the SOA serial.',
             ['serials' => $serials],
         );
-    }
-
-    /**
-     * @return array{mname: string, serial: int, refresh: int, retry: int, expire: int, minimum: int}|null
-     */
-    private function parse(string $value): ?array
-    {
-        $parts = preg_split('/\s+/', trim($value)) ?: [];
-
-        if (count($parts) < 7) {
-            return null;
-        }
-
-        foreach ([2, 3, 4, 5, 6] as $index) {
-            if (! ctype_digit($parts[$index])) {
-                return null;
-            }
-        }
-
-        return [
-            'mname' => $parts[0],
-            'serial' => (int) $parts[2],
-            'refresh' => (int) $parts[3],
-            'retry' => (int) $parts[4],
-            'expire' => (int) $parts[5],
-            'minimum' => (int) $parts[6],
-        ];
     }
 }

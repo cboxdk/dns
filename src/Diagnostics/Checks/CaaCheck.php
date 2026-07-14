@@ -15,7 +15,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * issue certificates for the domain; its absence is not a fault (any CA may issue),
  * so both outcomes are Info — presence is simply worth surfacing.
  */
-final class CaaCheck implements Check
+class CaaCheck implements Check
 {
     private const string CATEGORY = 'CAA';
 

@@ -38,7 +38,7 @@ use Throwable;
  * deliberately out of v1 — they need network egress or third-party infrastructure
  * that cannot be exercised offline — and are tracked as roadmap, not stubbed.
  */
-final class Diagnostics
+class Diagnostics
 {
     private readonly AuthoritativeResolver $authoritative;
 

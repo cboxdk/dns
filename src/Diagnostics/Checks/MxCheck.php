@@ -7,9 +7,9 @@ namespace Cbox\Dns\Diagnostics\Checks;
 use Cbox\Dns\Diagnostics\Contracts\Check;
 use Cbox\Dns\Diagnostics\DiagnosticContext;
 use Cbox\Dns\Diagnostics\Finding;
-use Cbox\Dns\Diagnostics\Support\IpAddress;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
+use Cbox\Dns\Support\IpAddress;
 
 /**
  * Validates the domain's mail routing (RFC 5321 §5). It checks that MX exists, that
@@ -21,7 +21,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * A `.` "null MX" (RFC 7505) is honoured as an explicit "this domain sends/receives
  * no mail" and reported as Info, not an error.
  */
-final class MxCheck implements Check
+class MxCheck implements Check
 {
     private const string CATEGORY = 'Email';
 

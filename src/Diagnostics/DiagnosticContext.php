@@ -21,17 +21,24 @@ use Cbox\Dns\Testing\FakeResolver;
  * a {@see FakeResolver} drives the entire engine offline.
  *
  * The `domain` is normalised to a bare, lower-case zone name (no trailing dot).
+ *
+ * Recursive lookups made through {@see self::nameservers()} / {@see self::addresses()}
+ * are memoised for the lifetime of a single run, so the ~nine checks in the default
+ * catalog do not each re-discover the same NS/A/AAAA sets over the wire.
  */
-final readonly class DiagnosticContext
+class DiagnosticContext
 {
-    public string $domain;
+    public readonly string $domain;
+
+    /** @var array<string, list<string>> */
+    private array $cache = [];
 
     public function __construct(
         string $domain,
-        public Resolver $resolver,
-        public AuthoritativeResolver $authoritative,
-        public DnssecValidator $dnssec,
-        public PropagationChecker $propagation,
+        public readonly Resolver $resolver,
+        public readonly AuthoritativeResolver $authoritative,
+        public readonly DnssecValidator $dnssec,
+        public readonly PropagationChecker $propagation,
     ) {
         $this->domain = strtolower(trim(trim($domain), ".\t\n\r "));
     }
@@ -66,13 +73,21 @@ final readonly class DiagnosticContext
      */
     private function addressesOfType(string $host, RecordType $type): array
     {
+        $key = strtolower(rtrim($host, '.')).'|'.$type->value;
+
+        if (isset($this->cache[$key])) {
+            return $this->cache[$key];
+        }
+
         try {
-            return array_map(
+            $values = array_map(
                 static fn (string $value): string => rtrim($value, '.'),
                 $this->resolver->query($host, $type)->values(),
             );
         } catch (DnsException) {
-            return [];
+            $values = [];
         }
+
+        return $this->cache[$key] = $values;
     }
 }

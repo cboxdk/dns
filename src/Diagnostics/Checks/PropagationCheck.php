@@ -18,7 +18,7 @@ use Cbox\Dns\Propagation\ResolverResult;
  * `Misconfigured` (authoritative answer missing) result is a Warning. The reliable
  * signal here is the authoritative-vs-recursive diff, not geographic coverage.
  */
-final class PropagationCheck implements Check
+class PropagationCheck implements Check
 {
     private const string CATEGORY = 'Propagation';
 

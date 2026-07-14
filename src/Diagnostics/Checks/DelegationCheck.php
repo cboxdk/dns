@@ -20,7 +20,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * as the slower side's TTL expires; missing glue for an in-zone NS is a Warning
  * because it can break bootstrap resolution.
  */
-final class DelegationCheck implements Check
+class DelegationCheck implements Check
 {
     private const string CATEGORY = 'Delegation';
 

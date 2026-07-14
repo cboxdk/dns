@@ -7,9 +7,9 @@ namespace Cbox\Dns\Diagnostics\Checks;
 use Cbox\Dns\Diagnostics\Contracts\Check;
 use Cbox\Dns\Diagnostics\DiagnosticContext;
 use Cbox\Dns\Diagnostics\Finding;
-use Cbox\Dns\Diagnostics\Support\IpAddress;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
+use Cbox\Dns\Support\IpAddress;
 
 /**
  * Checks the zone's nameservers themselves: there should be at least two (RFC 1034
@@ -22,7 +22,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * server did not respond, while a non-authoritative answer means it responded but
  * is not authoritative for the zone.
  */
-final class NameserverCheck implements Check
+class NameserverCheck implements Check
 {
     private const string CATEGORY = 'Nameservers';
 

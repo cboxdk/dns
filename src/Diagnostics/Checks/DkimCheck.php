@@ -16,7 +16,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * DNS), so this check is constructed with an explicit selector and is NOT part of
  * the default set — the orchestrator only runs it when a host supplies one.
  */
-final class DkimCheck implements Check
+class DkimCheck implements Check
 {
     private const string CATEGORY = 'Email';
 

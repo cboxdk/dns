@@ -11,7 +11,7 @@ use Cbox\Dns\Diagnostics\Enums\Severity;
  * produced, plus the roll-ups a report or CLI needs — errors present, grouped by
  * severity, grouped by category, and a clean-bill `passed()` signal.
  */
-final readonly class Report
+readonly class Report
 {
     /**
      * @param  list<Finding>  $findings

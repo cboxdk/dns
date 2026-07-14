@@ -12,7 +12,7 @@ use Cbox\Dns\Diagnostics\Enums\Severity;
  * human-readable `message`, and a machine-readable `context` bag for the raw
  * values behind the message (the record sets, IPs, serials, …).
  */
-final readonly class Finding
+readonly class Finding
 {
     /**
      * @param  array<string, mixed>  $context

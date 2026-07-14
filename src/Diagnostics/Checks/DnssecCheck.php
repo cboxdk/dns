@@ -16,7 +16,7 @@ use Cbox\Dns\Dnssec\Enums\ValidationStatus;
  * signature, DS link, or expired RRSIG — is an Error, matching the validator's
  * deny-by-default stance.
  */
-final class DnssecCheck implements Check
+class DnssecCheck implements Check
 {
     private const string CATEGORY = 'DNSSEC';
 

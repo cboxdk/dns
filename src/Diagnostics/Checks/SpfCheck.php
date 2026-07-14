@@ -20,7 +20,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * does not recurse into included policies, which would need live resolution of
  * every `include:` target. That recursion is a documented roadmap item.
  */
-final class SpfCheck implements Check
+class SpfCheck implements Check
 {
     private const string CATEGORY = 'Email';
 

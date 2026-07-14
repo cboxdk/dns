@@ -9,6 +9,7 @@ use Cbox\Dns\Diagnostics\DiagnosticContext;
 use Cbox\Dns\Diagnostics\Finding;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
+use Cbox\Dns\ValueObjects\DmarcPolicy;
 
 /**
  * Checks the DMARC policy at `_dmarc.<domain>`: absent is a Warning (spoofed mail
@@ -16,7 +17,7 @@ use Cbox\Dns\Exceptions\DnsException;
  * Warning; a valid but `p=none` policy is a Warning (monitor-only, no enforcement);
  * a valid `quarantine`/`reject` policy is Info.
  */
-final class DmarcCheck implements Check
+class DmarcCheck implements Check
 {
     private const string CATEGORY = 'Email';
 
@@ -59,44 +60,31 @@ final class DmarcCheck implements Check
 
     private function evaluatePolicy(string $record): Finding
     {
-        $policy = $this->tag($record, 'p');
+        $dmarc = DmarcPolicy::parse($record);
 
-        if ($policy === null || ! in_array($policy, self::VALID_POLICIES, true)) {
+        if ($dmarc === null || ! in_array($dmarc->policy, self::VALID_POLICIES, true)) {
             return Finding::warning(
                 self::CATEGORY,
                 'dmarc.policy',
                 'DMARC record has no valid p= policy tag.',
-                ['record' => $record, 'policy' => $policy],
+                ['record' => $record, 'policy' => $dmarc?->policy],
             );
         }
 
-        if ($policy === 'none') {
+        if ($dmarc->policy === 'none') {
             return Finding::warning(
                 self::CATEGORY,
                 'dmarc.policy',
                 'DMARC policy is p=none — monitoring only, spoofed mail is not quarantined or rejected.',
-                ['record' => $record, 'policy' => $policy],
+                ['record' => $record, 'policy' => $dmarc->policy],
             );
         }
 
         return Finding::info(
             self::CATEGORY,
             'dmarc.policy',
-            "DMARC is enforced with p={$policy}.",
-            ['record' => $record, 'policy' => $policy],
+            "DMARC is enforced with p={$dmarc->policy}.",
+            ['record' => $record, 'policy' => $dmarc->policy, 'pct' => $dmarc->percentage],
         );
-    }
-
-    private function tag(string $record, string $tag): ?string
-    {
-        foreach (explode(';', $record) as $part) {
-            [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
-
-            if (strcasecmp(trim($key), $tag) === 0) {
-                return strtolower(trim($value));
-            }
-        }
-
-        return null;
     }
 }
