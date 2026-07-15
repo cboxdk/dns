@@ -20,3 +20,5 @@ capabilities composed on top.
   include/redirect trees to a complete endpoint list; loop-safe and bounded.
 - **[Delegation tracing](tracing.md)** — walk a name's delegation from the root
   down, and the reverse chain for an IP; loop-safe like `dig +trace`.
+- **[Performance & when to use](when-to-use.md)** — every lookup is uncached (and
+  slower); use it for freshness/transparency, not as a hot-path resolver.

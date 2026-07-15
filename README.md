@@ -38,6 +38,32 @@ composer require cboxdk/dns
   standard library. Nothing to audit downstream, nothing to keep patched, no
   `dig` binary shelled out to.
 
+## Performance & intended use
+
+**Every lookup is a fresh network round-trip. There is no cache.** That is the
+point — this library talks to authoritative nameservers (or a resolver) directly,
+uncached, so what it returns is the ground truth *right now*. But it also means a
+lookup here is materially slower than your OS resolver (which answers most queries
+from a warm cache in well under a millisecond), and it does real DNS I/O on every
+call.
+
+So reach for this package when **freshness or transparency matters more than
+throughput**:
+
+- **Domain-ownership verification** — you must see a just-published TXT record
+  immediately, not wait out a recursive resolver's negative cache.
+- **DNS debugging & diagnostics** — intoDNS/MxToolbox-style health checks, delegation
+  traces, propagation comparisons.
+- **Forensic / point-in-time inspection** — "what does this actually resolve to at
+  the authority, this instant."
+- **DNSSEC validation** — you want to check the chain yourself, not trust a cache.
+
+Do **not** drop it in as a general-purpose resolver on a hot path — per-request name
+resolution, an SSRF guard that resolves-and-pins on every outbound call, anything
+high-throughput. There, a cached system resolver (`dns_get_record` / `getaddrinfo`)
+is faster and more robust, and you don't need authoritative freshness. Right tool
+for verification and debugging; wrong tool for a caching-hot-path resolver.
+
 ## Quickstart
 
 Every example below uses the real facade, `Cbox\Dns\Dns`.
