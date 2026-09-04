@@ -5,6 +5,29 @@ All notable changes to `cboxdk/dns` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-09-02
+
+Stable release. No code changes since 0.1.1: this promotes the existing surface
+to a versioned commitment rather than shipping anything new.
+
+### Changed
+
+- The public API is now covered by semantic versioning. Breaking changes require
+  a 2.0.0, so consumers can depend on `^1.0` instead of pinning an exact 0.x.
+
+### Scope
+
+- Live SMTP diagnostics (banner / STARTTLS / open-relay), RBL/blacklist lookups,
+  and geo-distributed propagation vantage points remain out of scope and are
+  tracked as roadmap. They are not stubbed.
+
+## [0.1.1] - 2026-07-15
+
+### Added
+
+- Documentation on performance and intended use: lookups are uncached and aimed
+  at verification and debugging rather than serving as a hot-path resolver.
+
 ## [0.1.0] - 2026-07-14
 
 Initial public release.
@@ -104,4 +127,6 @@ Initial public release.
   and geo-distributed propagation vantage points are intentionally **out of v1**
   and tracked as roadmap; they are not stubbed.
 
+[1.0.0]: https://github.com/cboxdk/dns/releases/tag/v1.0.0
+[0.1.1]: https://github.com/cboxdk/dns/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cboxdk/dns/releases/tag/v0.1.0
