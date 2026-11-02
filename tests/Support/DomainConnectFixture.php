@@ -66,6 +66,18 @@ final class DomainConnectFixture
         return new Discoverer($resolver, $http, new ZoneLocator($resolver), new FrozenClock(self::NOW), $allowNonPublicHosts);
     }
 
+    /** A file from tests/Fixtures/domain-connect (the test-only keypair, the reference signature). */
+    public static function file(string $name): string
+    {
+        $contents = file_get_contents(__DIR__.'/../Fixtures/domain-connect/'.$name);
+
+        if ($contents === false) {
+            throw new \RuntimeException("Missing the Domain Connect fixture [{$name}].");
+        }
+
+        return $contents;
+    }
+
     public static function soa(string $owner): DnsRecord
     {
         return new DnsRecord(RecordType::SOA, $owner, "ns1.{$owner}. hostmaster.{$owner}. 1 7200 3600 1209600 300");
