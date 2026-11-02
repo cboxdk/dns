@@ -40,6 +40,14 @@ final class DomainConnectFixture
         return (new FakeResolver)->stubRecords($apex, RecordType::SOA, [self::soa($apex)]);
     }
 
+    /** A resolver that lets AuthoritativeResolver find one authoritative server (`ns1.<apex>` at `$ip`) for `$apex`. */
+    public static function withAuthoritativeZone(string $apex, string $ip = '192.0.2.1'): FakeResolver
+    {
+        return (new FakeResolver)
+            ->stub($apex, RecordType::NS, ["ns1.{$apex}"])
+            ->stub("ns1.{$apex}", RecordType::A, [$ip]);
+    }
+
     /** The Task 1 fixture template (`cbox.dk` / `engage-sending`). */
     public static function engageTemplate(): Template
     {
