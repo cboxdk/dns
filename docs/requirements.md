@@ -24,8 +24,8 @@ There are **no** runtime package dependencies — this is a zero-dependency libr
 
 The DNSSEC validator verifies signatures with two extensions. They are **not** hard
 Composer constraints, because the resolver, domain verification, propagation, and
-the non-DNSSEC diagnostics all work without them — only DNSSEC validation calls into
-them:
+the non-DNSSEC diagnostics all work without them — only DNSSEC validation and
+Domain Connect signing and transport (`ext-openssl`, see below) call into them:
 
 | Extension | Used for |
 | --- | --- |

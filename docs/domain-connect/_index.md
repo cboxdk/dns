@@ -61,9 +61,12 @@ $report = $dc->check($dc->recordSet($template, $discovery->zone, ['token' => $to
 $report->passed();
 ```
 
-`Dns::domainConnect(Signer $signer, ?Transport $transport = null, string $keyHost = '_dcpubkeyv1')`
+`Dns::domainConnect(Signer $signer, ?Transport $transport = null, string $keyHost = '_dcpubkeyv1', bool $allowNonPublicHosts = false)`
 wires the module over the facade's resolver. The default transport is
-`StreamTransport` (PHP streams, 5-second timeout, no redirects followed). Discovery
+`StreamTransport` (PHP streams, 5-second total timeout, 64 KiB body cap, no
+redirects followed). `allowNonPublicHosts` lets discovery fetch from internal
+addresses, for local testing only; it is independent of the facade's
+`allowNonPublicNameservers`. Discovery
 lookups (`SOA`, `_domainconnect` TXT, the provider's addresses) go through that
 resolver; `check()` reads from the zone's authoritative nameservers.
 

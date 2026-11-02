@@ -52,8 +52,8 @@ are there too) and adds:
 - `domainConnect(string $keyHost = '_dcpubkeyv1')` — a `DomainConnect` wired over the
   fake resolver, transport and signer.
 
-The facade it builds on allows non-public nameserver addresses, so discovery runs
-with `allowNonPublicHosts` on: no `A`/`AAAA` stubs are needed for the provider's
+It builds the module with `Dns::domainConnect(..., allowNonPublicHosts: true)`, so
+discovery runs with the address check off: no `A`/`AAAA` stubs are needed for the provider's
 hosts, and requests are not pinned. To test the address check and the pinning,
 build a `Discoverer` yourself with `allowNonPublicHosts: false`.
 

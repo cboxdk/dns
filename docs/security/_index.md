@@ -73,17 +73,25 @@ server, and the settings document it returns names a second host (`urlAPI`). Bot
 are treated as untrusted:
 
 - Only plain `https` URLs are fetched: no other scheme, no whitespace, userinfo,
-  query or fragment, and only a hostname or IP literal as host.
+  query or fragment, and only a hostname or IP literal as host. The same rule
+  applies to every URL in the settings document (`urlSyncUX`, `urlAsyncUX`,
+  `urlAPI`, `urlControlPanel`), so a `javascript:` or `http://` `urlSyncUX` never
+  reaches an apply URL; such a document is treated as no settings.
 - Every `A`/`AAAA` address of the host must be public (the same filter as for
   nameservers); a failed lookup means no request. The request is then **pinned** to
   the address that passed, with TLS still verified against the host name, so a
   second DNS answer cannot redirect it to an internal address. Redirects are not
-  followed.
+  followed, the whole request is bounded by the timeout, and a body over 64 KiB is
+  refused.
 - The pinning depends on the `Transport`. The default `StreamTransport` honours the
   `$resolvedIp` it is given; a custom transport that resolves the host again loses
   this protection.
 - Any port on a public host is accepted. `allowNonPublicHosts` turns the checks off
-  and is meant for local testing only.
+  and is meant for local testing only. It is a separate switch from
+  `allowNonPublicNameservers` (`Dns::domainConnect($signer, allowNonPublicHosts: true)`),
+  so trusting internal nameservers does not also trust internal Domain Connect hosts.
+- The signing key must be RSA of at least 2048 bits; `OpenSslRs256Signer` refuses a
+  smaller one and marks the PEM argument `#[\SensitiveParameter]`.
 
 The apply URL is signed with RS256 over the encoded query string — `domain`, `host`,
 `redirect_uri`, `state`, the template variables and `groupId`. The `sig` and `key`

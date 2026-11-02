@@ -16,15 +16,22 @@ answers two questions about a name: does its DNS provider speak Domain Connect, 
    candidate. The first candidate that answers with a `SOA` record *owned by that
    candidate* is the apex; a parent's `SOA` carried in an authority section does not
    count. `mail.acme.com` becomes the `Zone` with apex `acme.com` and host `mail`.
-   No `SOA` for the name or any parent throws `ZoneNotFound`.
+   No `SOA` for the name or any parent below the TLD throws `ZoneNotFound` (a
+   single-label name such as `com` is never taken as an apex). An IDN is walked in
+   its punycode form, so the `Zone` is always ASCII: `mail.blåbær.dk` becomes apex
+   `xn--blbr-roah.dk`, host `mail`.
 2. **Read `_domainconnect.<apex>`.** The first TXT value names the provider's
    Domain Connect endpoint. It may be a host, `host:port`, `host/path`, or the same
    with an `https://` prefix. No record means no settings — the most common case.
 3. **Fetch the settings document** at `https://<value>/v2/<apex>/settings` and read
    it into `ProviderSettings` (`providerId`, `providerName`, `urlSyncUX`,
    `urlAsyncUX`, `urlAPI`, `urlControlPanel`, `width`, `height`, `nameServers`).
+   Each URL field, when present, must be plain `https` (a host; no userinfo, query
+   or fragment); a document with any other URL — `javascript:…`, `http://…`, a
+   base carrying `?` — is refused like a malformed one, so `settings` is `null`.
 4. **Check template support** (only with a template and a `urlAPI`):
    `GET {urlAPI}/v2/domainTemplates/providers/{providerId}/services/{serviceId}`.
+   A `urlAPI` (or `urlSyncUX`) that already ends in `/v2` is not given a second one.
    A `2xx` means supported, a `404` means not supported, anything else leaves it
    unknown.
 
@@ -45,7 +52,8 @@ answers two questions about a name: does its DNS provider speak Domain Connect, 
 - **Not available** (`settings` is `null`, or `isAvailable()` is `false`): there is
   no `_domainconnect` record, the settings request failed or returned something
   other than a `2xx` JSON object, the document is missing `providerId` /
-  `providerName`, or the provider has no synchronous flow. Show the customer the
+  `providerName` or carries a URL that is not plain `https`, or the provider has no
+  synchronous flow. Show the customer the
   records to add by hand.
 - **Not supported** (`supported === false`): the provider speaks Domain Connect but
   answered `404` for your template. That is expected until the provider has onboarded
@@ -78,6 +86,9 @@ checked before any request is made:
   closes the gap between "checked the name" and "connected to the name", where a
   second lookup could return a different, internal address.
 - **No redirects.** `StreamTransport` does not follow redirects.
+- **Bounded.** `StreamTransport` gives up after its timeout (5 seconds by default)
+  for the whole request, and refuses — status `0`, not a truncated body — a
+  response body over 64 KiB.
 
 A settings host that fails these checks throws `DiscoveryRefused` (a
 `DnsException`): the zone points somewhere that will not be fetched, and you
@@ -92,8 +103,10 @@ probably want to log it. A `urlAPI` that fails them only leaves `supported` as
 - **Any port is accepted** on a host that passes the public-address check
   (`dc.example.com:8443` is fine).
 - **`allowNonPublicHosts`** turns the address check and the pinning off. It exists
-  for local testing against a provider on your own network; the `Dns` facade sets it
-  from `allowNonPublicNameservers`, which the `InteractsWithDns` test helpers enable.
-  Do not enable it in production.
+  for local testing against a provider on your own network. On the facade it is the
+  fourth argument of `Dns::domainConnect(..., allowNonPublicHosts: true)` and is
+  independent of `allowNonPublicNameservers`: allowing internal nameservers does not
+  allow internal Domain Connect hosts. The `InteractsWithDomainConnect` test helper
+  turns it on. Do not enable it in production.
 - Discovery lookups go through the facade's resolver (recursive by default), not
   the authoritative nameservers.
