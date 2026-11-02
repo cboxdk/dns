@@ -6,7 +6,7 @@
         "dig", "mxtoolbox", "intodns", "dnssec", "doh", "dns-over-https", "authoritative",
         "propagation", "delegation", "dns-trace", "reverse-dns", "ptr", "cname",
         "spf", "dkim", "dmarc", "caa", "svcb", "https-record", "tlsa", "dane", "sshfp",
-        "idn", "punycode", "networking"
+        "idn", "punycode", "domain-connect", "networking"
     ],
     "homepage": "https://github.com/cboxdk/dns",
     "license": "MIT",
@@ -24,7 +24,7 @@
     },
     "suggest": {
         "ext-intl": "Punycode conversion of internationalized (IDN) domain names",
-        "ext-openssl": "RSA/ECDSA signature verification for the DNSSEC module",
+        "ext-openssl": "RSA/ECDSA signature verification for the DNSSEC module, and Domain Connect request signing",
         "ext-sodium": "Ed25519 signature verification for the DNSSEC module"
     },
     "autoload": {

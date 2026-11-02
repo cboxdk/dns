@@ -5,6 +5,40 @@ All notable changes to `cboxdk/dns` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Domain Connect** (`Cbox\Dns\DomainConnect`) — the service-provider side of the
+  Domain Connect synchronous flow, reached through `Dns::domainConnect()`:
+  `discover()`, `applyUrl()`, `recordSet()`, `check()` and `outcome()`.
+- Discovery: `ZoneLocator` finds a name's zone apex by `SOA` walk; `Discoverer`
+  follows the `_domainconnect` TXT record to the provider's settings document and
+  checks template support. Both HTTPS hosts must be plain `https`, resolve to public
+  addresses only, and the request is pinned to the checked address
+  (`DiscoveryRefused` otherwise). Results are a storable `Discovery`.
+- `Contracts\Transport` with `StreamTransport` (pinned connection, TLS verified
+  against the original host, no redirects) and `Testing\FakeTransport`.
+- Signed apply URLs: `SyncUrlBuilder` with `Contracts\Signer` and
+  `OpenSslRs256Signer` (RS256 via `ext-openssl`). Variables and groups are checked
+  against the template, and variables named like the flow's own parameters are
+  refused.
+- `PublicKeyRecords` — the `p=,a=RS256,d=` TXT strings for publishing the signing
+  public key (RSA public keys only; private keys are refused), and back to PEM.
+- Templates: `Template` and `TemplateRecord` value objects read from the published
+  JSON; `RecordSet` expands a template (hosts, built-in `%domain%` / `%host%` /
+  `%fqdn%` and caller variables, groups) into the records a zone should carry.
+- `RecordSetCheck` — a diagnostics check comparing a `RecordSet` against
+  authoritative DNS, one finding per record (SPFM by SPF term containment).
+- `ApplyOutcome` for the provider's redirect, and the `FakeSigner` and
+  `InteractsWithDomainConnect` test helpers.
+- Documentation under `docs/domain-connect/`.
+
+### Scope
+
+- Only the synchronous flow; the asynchronous (OAuth) flow is not implemented.
+  SRV template records are not supported by the record set or the check.
+
 ## [1.0.0] - 2026-09-02
 
 Stable release. No code changes since 0.1.1: this promotes the existing surface
