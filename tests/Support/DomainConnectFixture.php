@@ -6,8 +6,10 @@ namespace Cbox\Dns\Tests\Support;
 
 use Cbox\Dns\Dnssec\Testing\FrozenClock;
 use Cbox\Dns\DomainConnect\Discoverer;
+use Cbox\Dns\DomainConnect\RecordSet;
 use Cbox\Dns\DomainConnect\Template;
 use Cbox\Dns\DomainConnect\Testing\FakeTransport;
+use Cbox\Dns\DomainConnect\Zone;
 use Cbox\Dns\DomainConnect\ZoneLocator;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Testing\FakeResolver;
@@ -20,6 +22,8 @@ final class DomainConnectFixture
 {
     /** 2026-11-02T10:00:00Z */
     public const int NOW = 1793613600;
+
+    public const string NS_IP = '192.0.2.1';
 
     public const string API_ADDRESS = '203.0.113.20';
 
@@ -88,6 +92,31 @@ final class DomainConnectFixture
     public static function discoverer(FakeResolver $resolver, FakeTransport $http, bool $allowNonPublicHosts = false): Discoverer
     {
         return new Discoverer($resolver, $http, new ZoneLocator($resolver), new FrozenClock(self::NOW), $allowNonPublicHosts);
+    }
+
+    /** The engage-sending template expanded for the apex of acme.example. */
+    public static function engageSet(): RecordSet
+    {
+        return RecordSet::fromTemplate(self::engageTemplate(), Zone::of('acme.example'), self::engageVariables());
+    }
+
+    /** Stubs the MX at send.acme.example on the authoritative server. */
+    public static function mxAt(FakeResolver $fake, string $target, int $priority): FakeResolver
+    {
+        return $fake->stubRecords('send.acme.example', RecordType::MX, [new DnsRecord(RecordType::MX, 'send.acme.example', $target, priority: $priority)], nameserver: self::NS_IP);
+    }
+
+    /**
+     * An acme.example zone carrying every engage-sending record.
+     *
+     * @param  list<string>  $spf
+     */
+    public static function liveZone(string $mx = 'feedback-smtp.eu-west-1.amazonses.com.', array $spf = ['v=spf1 include:amazonses.com ~all']): FakeResolver
+    {
+        return self::mxAt(self::withAuthoritativeZone('acme.example', self::NS_IP), $mx, 10)
+            ->stub('send.acme.example', RecordType::TXT, $spf, nameserver: self::NS_IP)
+            ->stub('resend._domainkey.acme.example', RecordType::TXT, ['p=MIGf'], nameserver: self::NS_IP)
+            ->stub('_dmarc.acme.example', RecordType::TXT, ['v=DMARC1; p=quarantine'], nameserver: self::NS_IP);
     }
 
     /** A file from tests/Fixtures/domain-connect (the test-only keypair, the reference signature). */

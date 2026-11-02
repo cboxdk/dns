@@ -86,7 +86,8 @@ class RecordSetCheck implements Check
                     && $this->normaliseName($record->value) === $this->normaliseName($expected->value),
                 TemplateRecordType::CNAME, TemplateRecordType::NS, TemplateRecordType::APEXCNAME => $this->normaliseName($record->value) === $this->normaliseName($expected->value),
                 TemplateRecordType::SPFM => $this->spfContains($record->value, $expected->value),
-                default => $record->value === $expected->value,
+                TemplateRecordType::A, TemplateRecordType::AAAA => $record->value === $expected->value,
+                TemplateRecordType::SRV => false,
             };
 
             if ($matched) {
