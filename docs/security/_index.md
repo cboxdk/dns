@@ -65,6 +65,43 @@ Key posture points:
   zone's records. This closes a cross-zone forgery bypass found during pre-release
   adversarial review.
 
+### Domain Connect
+
+[Domain Connect discovery](../domain-connect/discovery.md) turns a TXT record that
+the zone's owner controls (`_domainconnect.<domain>`) into an HTTPS request from your
+server, and the settings document it returns names a second host (`urlAPI`). Both
+are treated as untrusted:
+
+- Only plain `https` URLs are fetched: no other scheme, no whitespace, userinfo,
+  query or fragment, and only a hostname or IP literal as host. The same rule
+  applies to every URL in the settings document (`urlSyncUX`, `urlAsyncUX`,
+  `urlAPI`, `urlControlPanel`), so a `javascript:` or `http://` `urlSyncUX` never
+  reaches an apply URL; such a document is treated as no settings.
+- Every `A`/`AAAA` address of the host must be public (the same filter as for
+  nameservers); a failed lookup means no request. The request is then **pinned** to
+  the address that passed, with TLS still verified against the host name, so a
+  second DNS answer cannot redirect it to an internal address. Redirects are not
+  followed, the whole request is bounded by the timeout, and a body over 64 KiB is
+  refused.
+- The pinning depends on the `Transport`. The default `StreamTransport` honours the
+  `$resolvedIp` it is given; a custom transport that resolves the host again loses
+  this protection.
+- Any port on a public host is accepted. `allowNonPublicHosts` turns the checks off
+  and is meant for local testing only. It is a separate switch from
+  `allowNonPublicNameservers` (`Dns::domainConnect($signer, allowNonPublicHosts: true)`),
+  so trusting internal nameservers does not also trust internal Domain Connect hosts.
+- The signing key must be RSA of at least 2048 bits; `OpenSslRs256Signer` refuses a
+  smaller one and marks the PEM argument `#[\SensitiveParameter]`.
+
+The apply URL is signed with RS256 over the encoded query string — `domain`, `host`,
+`redirect_uri`, `state`, the template variables and `groupId`. The `sig` and `key`
+parameters are appended after signing and are not covered by it; the DNS provider
+reads the public key from `<key>.<syncPubKeyDomain>`. Signing uses `openssl_sign()`
+with the algorithm fixed. `PublicKeyRecords::for()` accepts only an RSA **public**
+key and refuses a private key, so the key you sign with cannot be published in DNS
+by mistake. The module does not validate the `state` returned on the redirect; that
+is the application's job. See [Signing](../domain-connect/signing.md).
+
 ### Testing and review — honest scope
 
 The DNSSEC module is tested against **real captured signed-zone vectors** and

@@ -7,7 +7,7 @@ description: The PHP version and extensions this package requires, taken directl
 # Requirements
 
 These are the constraints the Composer resolver actually enforces, plus the
-extensions the DNSSEC module needs at runtime. Nothing here is invented.
+extensions the DNSSEC and Domain Connect modules need at runtime. Nothing here is invented.
 
 ## Enforced by Composer
 
@@ -24,8 +24,8 @@ There are **no** runtime package dependencies — this is a zero-dependency libr
 
 The DNSSEC validator verifies signatures with two extensions. They are **not** hard
 Composer constraints, because the resolver, domain verification, propagation, and
-the non-DNSSEC diagnostics all work without them — only DNSSEC validation calls into
-them:
+the non-DNSSEC diagnostics all work without them — only DNSSEC validation and
+Domain Connect signing and transport (`ext-openssl`, see below) call into them:
 
 | Extension | Used for |
 | --- | --- |
@@ -34,6 +34,14 @@ them:
 
 Both are part of a standard PHP distribution. If you validate DNSSEC on a build
 that lacks them, verification of the affected algorithm family cannot succeed.
+
+## Needed by Domain Connect
+
+[Domain Connect](domain-connect/_index.md) signs apply URLs and reads public keys
+with `ext-openssl` (`OpenSslRs256Signer`, `PublicKeyRecords`). The default
+`StreamTransport` fetches over PHP's `https://` stream wrapper, which also needs
+`ext-openssl` and `allow_url_fopen`. Discovery through your own `Transport`, record
+sets and the record check need neither.
 
 ## Optional: internationalized names
 

@@ -45,6 +45,7 @@ $dns->verifyDomain('example.com', $token);                 // bool (authoritativ
 $dns->checkPropagation('www.example.com', RecordType::A, 'example.com');
 $dns->dnssec()->validate('cloudflare.com');                // ValidationResult
 $dns->diagnose('example.com');                             // Report
+$dns->domainConnect($signer)->discover('example.com');    // Discovery
 ```
 
 Everything the facade composes is public, so you can reach past it —
@@ -62,6 +63,8 @@ Everything the facade composes is public, so you can reach past it —
   deny-by-default threat model.
 - **[Diagnostics](diagnostics/_index.md)** — the check catalog and the propagation
   provider registry.
+- **[Domain Connect](domain-connect/_index.md)** — set up DNS records through the
+  customer's DNS provider: discovery, signed apply URLs, and checking the result.
 - **[Cookbook](cookbook/_index.md)** — task-oriented recipes.
 - **[Security](security/_index.md)** — threat model and honest scope.
 

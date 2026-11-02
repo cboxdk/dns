@@ -144,6 +144,33 @@ foreach ($report->findings as $finding) {
 }
 ```
 
+### Set up DNS records through the customer's DNS host (Domain Connect)
+
+```php
+use Cbox\Dns\DomainConnect\ApplyRequest;
+use Cbox\Dns\DomainConnect\Signers\OpenSslRs256Signer;
+use Cbox\Dns\DomainConnect\Template;
+
+$dc = $dns->domainConnect(new OpenSslRs256Signer($privateKeyPem));
+$template = Template::fromJson(file_get_contents('example.com.mail.json'));
+
+// 1. Does acme.com's DNS provider speak Domain Connect and know the template?
+$discovery = $dc->discover('acme.com', $template);
+
+// 2. If so, send the customer to a signed apply URL.
+if ($discovery->isAvailable() && $discovery->supportsTemplate()) {
+    $url = $dc->applyUrl(
+        new ApplyRequest($template, $discovery->zone, ['token' => $token], state: $state),
+        $discovery->settings,
+    );
+}
+
+// 3. Afterwards: are the records live at the zone's authoritative nameservers?
+$dc->check($dc->recordSet($template, $discovery->zone, ['token' => $token]))->passed();
+```
+
+Synchronous flow only; see [`docs/domain-connect/`](docs/domain-connect/_index.md).
+
 ## Features
 
 - **Zero-dependency socket resolver** — DNS over UDP with automatic TCP retry on
@@ -194,6 +221,11 @@ foreach ($report->findings as $finding) {
   from the root down (`dig +trace`-style), recording each zone cut, which nameserver
   delegated it, and the glue; `$dns->traceReverse('8.8.8.8')` traces the reverse
   (in-addr.arpa) chain for CIDR/reverse-zone delegation. Loop-safe by construction.
+- **Domain Connect** — discover whether a domain's DNS provider supports your
+  template, build the RS256-signed apply URL, publish the signing key as TXT, and
+  check the resulting records against authoritative DNS. Discovery hosts are
+  restricted to public addresses and the connection is pinned (synchronous flow
+  only).
 - **Testable by construction** — everything resolves through the `Resolver`
   contract; `Cbox\Dns\Testing\FakeResolver` (with per-nameserver stubs, RCODE stubs,
   query recording, and strict mode) and the `InteractsWithDns` trait drive the
@@ -204,9 +236,10 @@ foreach ($report->findings as $finding) {
 - **PHP 8.4+**
 - **`ext-sockets`** (enforced) — the raw resolver transport.
 - **`ext-openssl` and `ext-sodium`** — required only by the DNSSEC module (RSA/ECDSA
-  and Ed25519 signature verification respectively). Both ship with a stock PHP
-  build; they are not hard Composer constraints because the resolver, verification,
-  propagation, and non-DNSSEC diagnostics work without them.
+  and Ed25519 signature verification respectively) and, for `ext-openssl`, by
+  Domain Connect request signing and its default HTTPS transport. Both ship with a
+  stock PHP build; they are not hard Composer constraints because the resolver,
+  verification, propagation, and non-DNSSEC diagnostics work without them.
 - **`ext-intl`** — needed only to look up an internationalized (IDN) domain name;
   an ASCII name works without it. Suggested, not required.
 
@@ -232,7 +265,8 @@ This is a **DNS-only** library, and honest about it:
 Full docs live in [`docs/`](docs/index.md): a [quickstart](docs/quickstart.md),
 [core concepts](docs/core-concepts/_index.md) (resolvers, verification,
 propagation, architecture), the [DNSSEC](docs/dnssec/_index.md) validation and
-threat model, the [diagnostics](docs/diagnostics/_index.md) check catalog, a
+threat model, the [diagnostics](docs/diagnostics/_index.md) check catalog,
+[Domain Connect](docs/domain-connect/_index.md), a
 [cookbook](docs/cookbook/_index.md), and the [security](docs/security/_index.md)
 posture.
 
