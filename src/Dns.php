@@ -10,6 +10,13 @@ use Cbox\Dns\Diagnostics\Contracts\Check;
 use Cbox\Dns\Diagnostics\Diagnostics;
 use Cbox\Dns\Diagnostics\Report;
 use Cbox\Dns\Dnssec\DnssecValidator;
+use Cbox\Dns\DomainConnect\Contracts\Signer;
+use Cbox\Dns\DomainConnect\Contracts\Transport;
+use Cbox\Dns\DomainConnect\Discoverer;
+use Cbox\Dns\DomainConnect\DomainConnect;
+use Cbox\Dns\DomainConnect\SyncUrlBuilder;
+use Cbox\Dns\DomainConnect\Transports\StreamTransport;
+use Cbox\Dns\DomainConnect\ZoneLocator;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Propagation\PropagationChecker;
 use Cbox\Dns\Propagation\PropagationReport;
@@ -52,9 +59,9 @@ class Dns
     public function __construct(
         private readonly Resolver $resolver = new SocketResolver,
         string $challengePrefix = '_cbox-challenge',
-        bool $allowNonPublicNameservers = false,
+        private readonly bool $allowNonPublicNameservers = false,
     ) {
-        $this->authoritative = new AuthoritativeResolver($this->resolver, $allowNonPublicNameservers);
+        $this->authoritative = new AuthoritativeResolver($this->resolver, $this->allowNonPublicNameservers);
         $this->verifier = new DomainVerifier($this->authoritative, $challengePrefix);
     }
 
@@ -184,6 +191,23 @@ class Dns
     public function trace(string $name, RecordType $type = RecordType::NS): DelegationTrace
     {
         return (new DelegationTracer($this->resolver))->trace($name, $type);
+    }
+
+    /**
+     * The Domain Connect front door: discover whether a name's DNS provider supports
+     * a template, build signed apply URLs, and check the records afterwards — all
+     * through this facade's resolver. The default transport is {@see StreamTransport}.
+     */
+    public function domainConnect(Signer $signer, ?Transport $transport = null, string $keyHost = '_dcpubkeyv1'): DomainConnect
+    {
+        $discoverer = new Discoverer(
+            $this->resolver,
+            $transport ?? new StreamTransport,
+            new ZoneLocator($this->resolver),
+            allowNonPublicHosts: $this->allowNonPublicNameservers,
+        );
+
+        return new DomainConnect($discoverer, new SyncUrlBuilder($signer, $keyHost), $this->resolver);
     }
 
     /**

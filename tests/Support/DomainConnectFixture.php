@@ -83,7 +83,14 @@ final class DomainConnectFixture
     /** A resolver for acme.example whose `_domainconnect` TXT is `$txt`, whose `$host` has A `$address`, and whose provider API host has a public A. */
     public static function discoveryResolver(string $txt = 'dc.cloudflare.example', string $address = '203.0.113.10', string $host = 'dc.cloudflare.example'): FakeResolver
     {
-        return self::resolverWithZone('acme.example')
+        return self::stubDiscoveryOn(self::resolverWithZone('acme.example'), $txt, $address, $host);
+    }
+
+    /** Adds the discovery stubs of {@see self::discoveryResolver()} to an existing fake. */
+    public static function stubDiscoveryOn(FakeResolver $fake, string $txt = 'dc.cloudflare.example', string $address = '203.0.113.10', string $host = 'dc.cloudflare.example'): FakeResolver
+    {
+        return $fake
+            ->stubRecords('acme.example', RecordType::SOA, [self::soa('acme.example')])
             ->stub('_domainconnect.acme.example', RecordType::TXT, [$txt])
             ->stub($host, RecordType::A, [$address])
             ->stub('api.cloudflare.example', RecordType::A, [self::API_ADDRESS]);
