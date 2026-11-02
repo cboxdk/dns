@@ -21,10 +21,11 @@ use DateTimeImmutable;
  * `_domainconnect` TXT record and the provider's settings document) and, given
  * a template, whether the provider knows it.
  *
- * The `_domainconnect` value is attacker-influenced, so it is only fetched over
- * https and only when its host resolves to public addresses (unless
- * `allowNonPublicHosts`). Failures to find or read the provider are reported as
- * a Discovery without settings, never as an exception.
+ * Both URLs fetched come from data others control, so each is parsed the way
+ * the transport will parse it, must be plain https (no userinfo, query or
+ * fragment, a hostname or IP literal host), and, unless `allowNonPublicHosts`,
+ * its host must resolve to public addresses only. The request is then pinned to
+ * the address that passed the check. A failed lookup fails closed: no request.
  */
 class Discoverer
 {
@@ -43,18 +44,16 @@ class Discoverer
     public function discover(string $name, ?Template $template = null): Discovery
     {
         $zone = $this->zones->locate($name);
-        $base = $this->discoveryBase($zone->apex);
-        $settings = $base === null ? null : $this->settings("https://{$base}/v2/{$zone->apex}/settings");
-        $supported = $settings === null || $template === null ? null : $this->supports($settings, $template);
+        $settings = $this->settings($zone->apex);
+        $supported = $settings === null || $template === null ? null : $this->supports($zone->apex, $settings, $template);
 
         return new Discovery($zone, $settings, $supported, new DateTimeImmutable('@'.$this->clock->now()));
     }
 
     /**
-     * The `_domainconnect` value without scheme or trailing slash, or null when
-     * there is none or its host has no address.
+     * @throws DiscoveryRefused
      */
-    private function discoveryBase(string $apex): ?string
+    private function settings(string $apex): ?ProviderSettings
     {
         $value = trim($this->values("_domainconnect.{$apex}", RecordType::TXT)[0] ?? '');
 
@@ -74,70 +73,15 @@ class Discoverer
             $value = substr($value, 8);
         }
 
-        $value = rtrim($value, '/');
+        $url = 'https://'.rtrim($value, '/')."/v2/{$apex}/settings";
+        $host = $this->safeHost($url);
 
-        if ($value === '') {
-            return null;
+        if ($host === null) {
+            throw DiscoveryRefused::because($apex, 'the _domainconnect value is not a plain https host, host:port or host/path');
         }
 
-        if (! $this->allowNonPublicHosts && ! $this->hostIsPublic($apex, $value)) {
-            return null;
-        }
-
-        return $value;
-    }
-
-    /**
-     * Whether the value's host resolves to public addresses only; false when it
-     * resolves to none.
-     *
-     * @throws DiscoveryRefused when any address is non-public
-     */
-    private function hostIsPublic(string $apex, string $value): bool
-    {
-        $host = explode('/', $value, 2)[0];
-        $host = explode(':', $host, 2)[0];
-
-        $addresses = IpAddress::isIp($host) ? [$host] : [...$this->values($host, RecordType::A), ...$this->values($host, RecordType::AAAA)];
-
-        foreach ($addresses as $address) {
-            if (! IpAddress::isPublic($address)) {
-                throw DiscoveryRefused::because($apex, "the discovery host [{$host}] resolves to the non-public address [{$address}]");
-            }
-        }
-
-        return $addresses !== [];
-    }
-
-    /**
-     * The values of the answer records of exactly `$type` (a CNAME in the answer
-     * is skipped); none when the lookup fails.
-     *
-     * @return list<string>
-     */
-    private function values(string $host, RecordType $type): array
-    {
-        try {
-            $records = $this->resolver->query($host, $type)->records;
-        } catch (DnsException) {
-            return [];
-        }
-
-        $values = [];
-
-        foreach ($records as $record) {
-            if ($record->type === $type) {
-                $values[] = $record->value;
-            }
-        }
-
-        return $values;
-    }
-
-    private function settings(string $url): ?ProviderSettings
-    {
-        $response = $this->transport->get($url);
-        $data = $response->ok() ? $response->json() : null;
+        $response = $this->fetch($apex, $url, $host);
+        $data = $response !== null && $response->ok() ? $response->json() : null;
 
         if ($data === null) {
             return null;
@@ -150,22 +94,134 @@ class Discoverer
         }
     }
 
-    private function supports(ProviderSettings $settings, Template $template): ?bool
+    private function supports(string $apex, ProviderSettings $settings, Template $template): ?bool
     {
-        if ($settings->urlAPI === null || strncasecmp($settings->urlAPI, 'https://', 8) !== 0) {
+        if ($settings->urlAPI === null) {
             return null;
         }
 
         $url = rtrim($settings->urlAPI, '/')
             .'/v2/domainTemplates/providers/'.rawurlencode($template->providerId)
             .'/services/'.rawurlencode($template->serviceId);
+        $host = $this->safeHost($url);
 
-        $response = $this->transport->get($url);
+        if ($host === null) {
+            return null;
+        }
+
+        try {
+            $response = $this->fetch($apex, $url, $host);
+        } catch (DiscoveryRefused) {
+            return null; // the provider was found; an unsafe API host only leaves support unknown
+        }
 
         return match (true) {
+            $response === null => null,
             $response->ok() => true,
             $response->status === 404 => false,
             default => null,
         };
+    }
+
+    /**
+     * The host of an https URL with no userinfo, query or fragment, whose host is
+     * a hostname or (bracketed) IP literal; brackets stripped. Null otherwise.
+     */
+    private function safeHost(string $url): ?string
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts)
+            || strtolower($parts['scheme'] ?? '') !== 'https'
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
+        ) {
+            return null;
+        }
+
+        $host = $parts['host'] ?? '';
+
+        if (preg_match('/^\[(.+)\]$/', $host, $m) === 1) {
+            return filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? $m[1] : null;
+        }
+
+        return preg_match('/^[A-Za-z0-9.-]+$/', $host) === 1 ? $host : null;
+    }
+
+    /**
+     * GET the URL pinned to a validated public address of its host; null (no
+     * request) when the host has no address or a lookup fails.
+     *
+     * @throws DiscoveryRefused when the host has a non-public address
+     */
+    private function fetch(string $apex, string $url, string $host): ?HttpResponse
+    {
+        if ($this->allowNonPublicHosts) {
+            return $this->transport->get($url);
+        }
+
+        $peer = $this->publicPeer($apex, $host);
+
+        return $peer === null ? null : $this->transport->get($url, $peer);
+    }
+
+    /**
+     * The address to pin to (an A record preferred over AAAA), or null when the
+     * host has none or either lookup fails (fail closed: a failed family is not
+     * skipped in favour of the other).
+     *
+     * @throws DiscoveryRefused when any address is non-public
+     */
+    private function publicPeer(string $apex, string $host): ?string
+    {
+        if (IpAddress::isIp($host)) {
+            $addresses = [$host];
+        } else {
+            $v4 = $this->values($host, RecordType::A);
+            $v6 = $v4 === null ? null : $this->values($host, RecordType::AAAA);
+
+            if ($v4 === null || $v6 === null) {
+                return null;
+            }
+
+            $addresses = [...$v4, ...$v6];
+        }
+
+        foreach ($addresses as $address) {
+            if (! IpAddress::isPublic($address)) {
+                throw DiscoveryRefused::because($apex, "the host [{$host}] resolves to the non-public address [{$address}]");
+            }
+        }
+
+        return $addresses[0] ?? null;
+    }
+
+    /**
+     * The values of the answer records of exactly `$type` (a CNAME in the
+     * answer is skipped), or null when the lookup failed: it threw, or the
+     * server answered with an error code other than NXDOMAIN.
+     *
+     * @return list<string>|null
+     */
+    private function values(string $host, RecordType $type): ?array
+    {
+        try {
+            $response = $this->resolver->query($host, $type);
+        } catch (DnsException) {
+            return null;
+        }
+
+        if (! $response->succeeded() && ! $response->isNxDomain()) {
+            return null;
+        }
+
+        $values = [];
+
+        foreach ($response->records as $record) {
+            if ($record->type === $type) {
+                $values[] = $record->value;
+            }
+        }
+
+        return $values;
     }
 }

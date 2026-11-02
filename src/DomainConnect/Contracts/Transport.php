@@ -12,5 +12,10 @@ use Cbox\Dns\DomainConnect\HttpResponse;
  */
 interface Transport
 {
-    public function get(string $url): HttpResponse;
+    /**
+     * @param  string|null  $resolvedIp  when given, connect to this address instead of
+     *                                   resolving the URL's host again, while still
+     *                                   verifying TLS for that host (peer pinning)
+     */
+    public function get(string $url, ?string $resolvedIp = null): HttpResponse;
 }

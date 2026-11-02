@@ -17,6 +17,9 @@ class FakeTransport implements Transport
     /** @var list<string> */
     private array $requests = [];
 
+    /** @var array<string, string|null> */
+    private array $pinned = [];
+
     private bool $strict = false;
 
     /**
@@ -39,9 +42,10 @@ class FakeTransport implements Transport
         return $this;
     }
 
-    public function get(string $url): HttpResponse
+    public function get(string $url, ?string $resolvedIp = null): HttpResponse
     {
         $this->requests[] = $url;
+        $this->pinned[$url] = $resolvedIp;
 
         if (isset($this->stubs[$url])) {
             return $this->stubs[$url];
@@ -60,6 +64,17 @@ class FakeTransport implements Transport
     public function requests(): array
     {
         return $this->requests;
+    }
+
+    /**
+     * The address each requested URL was pinned to (null: not pinned); the
+     * latest request wins for a repeated URL.
+     *
+     * @return array<string, string|null>
+     */
+    public function pinned(): array
+    {
+        return $this->pinned;
     }
 
     public function assertRequested(string $url): void

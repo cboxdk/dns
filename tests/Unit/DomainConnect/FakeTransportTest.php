@@ -33,3 +33,15 @@ it('turns a non-2xx status into ok() false and a non-JSON body into json() null'
         ->and((new HttpResponse(200, '["a","b"]'))->json())->toBeNull()
         ->and((new HttpResponse(200, '{"a":1}'))->json())->toBe(['a' => 1]);
 });
+
+it('matches stubs by url regardless of the pinned address and records the pin', function (): void {
+    $fake = (new FakeTransport)->strict()->stub('https://a/', 200, 'ok');
+
+    expect($fake->get('https://a/', '203.0.113.10')->body)->toBe('ok')
+        ->and($fake->requests())->toBe(['https://a/'])
+        ->and($fake->pinned())->toBe(['https://a/' => '203.0.113.10']);
+
+    $fake->get('https://a/');
+
+    expect($fake->pinned())->toBe(['https://a/' => null]);
+});

@@ -8,7 +8,8 @@ use Cbox\Dns\Exceptions\DnsException;
 
 /**
  * A zone's `_domainconnect` record points somewhere we will not fetch from: a
- * scheme other than https, a malformed value, or a host on a non-public address.
+ * scheme other than https, whitespace, userinfo, a query or fragment, a host
+ * outside the hostname charset, or a host with a non-public address.
  */
 class DiscoveryRefused extends DnsException
 {

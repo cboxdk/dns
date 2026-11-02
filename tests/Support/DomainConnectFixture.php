@@ -21,6 +21,8 @@ final class DomainConnectFixture
     /** 2026-11-02T10:00:00Z */
     public const int NOW = 1793613600;
 
+    public const string API_ADDRESS = '203.0.113.20';
+
     public const string SETTINGS_URL = 'https://dc.cloudflare.example/v2/acme.example/settings';
 
     public const string SUPPORT_URL = 'https://api.cloudflare.example/v2/domainTemplates/providers/cbox.dk/services/engage-sending';
@@ -50,12 +52,13 @@ final class DomainConnectFixture
         return Template::fromJson($json);
     }
 
-    /** A resolver for acme.example whose `_domainconnect` TXT is `$txt` and whose `$host` has A `$address`. */
+    /** A resolver for acme.example whose `_domainconnect` TXT is `$txt`, whose `$host` has A `$address`, and whose provider API host has a public A. */
     public static function discoveryResolver(string $txt = 'dc.cloudflare.example', string $address = '203.0.113.10', string $host = 'dc.cloudflare.example'): FakeResolver
     {
         return self::resolverWithZone('acme.example')
             ->stub('_domainconnect.acme.example', RecordType::TXT, [$txt])
-            ->stub($host, RecordType::A, [$address]);
+            ->stub($host, RecordType::A, [$address])
+            ->stub('api.cloudflare.example', RecordType::A, [self::API_ADDRESS]);
     }
 
     public static function discoverer(FakeResolver $resolver, FakeTransport $http, bool $allowNonPublicHosts = false): Discoverer
