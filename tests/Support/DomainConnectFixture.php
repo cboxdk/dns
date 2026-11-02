@@ -52,6 +52,16 @@ final class DomainConnectFixture
         return Template::fromJson($json);
     }
 
+    /**
+     * The engage-sending template with its records replaced by `$records`.
+     *
+     * @param  list<array<string, mixed>>  $records
+     */
+    public static function templateWithRecords(array $records): Template
+    {
+        return Template::fromArray([...self::engageTemplate()->toArray(), 'records' => $records]);
+    }
+
     /** A resolver for acme.example whose `_domainconnect` TXT is `$txt`, whose `$host` has A `$address`, and whose provider API host has a public A. */
     public static function discoveryResolver(string $txt = 'dc.cloudflare.example', string $address = '203.0.113.10', string $host = 'dc.cloudflare.example'): FakeResolver
     {

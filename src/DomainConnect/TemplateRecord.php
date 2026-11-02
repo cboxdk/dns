@@ -97,8 +97,12 @@ readonly class TemplateRecord
         return $out;
     }
 
+    /** Variables the DNS provider fills in itself; never supplied by the caller. */
+    public const array BUILT_IN_VARIABLES = ['domain', 'host', 'fqdn'];
+
     /**
-     * Variable names used in pointsTo, data and spfRules, in order of first appearance.
+     * Variable names used in host, pointsTo, data and spfRules, in order of
+     * first appearance, without the built-ins `%domain%`, `%host%` and `%fqdn%`.
      *
      * @return list<string>
      */
@@ -106,10 +110,12 @@ readonly class TemplateRecord
     {
         $names = [];
 
-        foreach ([$this->pointsTo, $this->data, $this->spfRules] as $value) {
+        foreach ([$this->host, $this->pointsTo, $this->data, $this->spfRules] as $value) {
             if ($value !== null && preg_match_all('/%([a-z0-9_]+)%/i', $value, $matches) > 0) {
                 foreach ($matches[1] as $name) {
-                    $names[] = $name;
+                    if (! in_array(strtolower($name), self::BUILT_IN_VARIABLES, true)) {
+                        $names[] = $name;
+                    }
                 }
             }
         }

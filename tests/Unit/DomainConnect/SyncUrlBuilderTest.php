@@ -45,6 +45,16 @@ it('joins several groups with a comma', function (): void {
     expect($signer->signed())->toBe(['domain=acme.example&mx=m&dkim=k&groupId=sending%2Cdmarc']);
 });
 
+it('sends each group once', function (): void {
+    $signer = new FakeSigner;
+    (new SyncUrlBuilder($signer))->build(
+        new ApplyRequest(DomainConnectFixture::engageTemplate(), Zone::of('acme.example'), ['mx' => 'm', 'dkim' => 'k'], ['sending', 'sending']),
+        new ProviderSettings('example', 'Example', urlSyncUX: 'https://dc.example'),
+    );
+
+    expect($signer->signed())->toBe(['domain=acme.example&mx=m&dkim=k&groupId=sending']);
+});
+
 it('refuses a missing variable, an unknown variable, an unknown group, and a provider without sync', function (ApplyRequest $request, ProviderSettings $settings, string $exception): void {
     $signer = new FakeSigner;
 
@@ -70,6 +80,16 @@ it('refuses a missing variable, an unknown variable, an unknown group, and a pro
         new ApplyRequest(DomainConnectFixture::engageTemplate(), Zone::of('acme.example'), ['mx' => 'm', 'dkim' => 'k']),
         new ProviderSettings('example', 'Example'),
         SyncFlowUnavailable::class,
+    ],
+    'variable named like a built-in parameter' => fn () => [
+        new ApplyRequest(DomainConnectFixture::templateWithRecords([['type' => 'TXT', 'host' => '@', 'data' => '%state%', 'ttl' => 3600]]), Zone::of('acme.example'), ['state' => 'x']),
+        new ProviderSettings('example', 'Example', urlSyncUX: 'https://dc.example'),
+        InvalidApplyRequest::class,
+    ],
+    'variable named sig, in any case' => fn () => [
+        new ApplyRequest(DomainConnectFixture::templateWithRecords([['type' => 'TXT', 'host' => '@', 'data' => '%SIG%', 'ttl' => 3600]]), Zone::of('acme.example'), ['SIG' => 'x']),
+        new ProviderSettings('example', 'Example', urlSyncUX: 'https://dc.example'),
+        InvalidApplyRequest::class,
     ],
     'template blocks sync' => fn () => [
         new ApplyRequest(Template::fromArray([...DomainConnectFixture::engageTemplate()->toArray(), 'syncBlock' => true]), Zone::of('acme.example'), ['mx' => 'm', 'dkim' => 'k']),

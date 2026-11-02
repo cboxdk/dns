@@ -38,6 +38,15 @@ it('lists the variables and group ids a template uses, in order of first appeara
         ->and($template->groupIds())->toBe(['sending', 'dmarc']);
 });
 
+it('reads variables from the host field and leaves out the provider-supplied domain, host and fqdn', function (): void {
+    $template = Template::fromArray([...Template::fromJson(engageTemplateJson())->toArray(), 'records' => [
+        ['type' => 'TXT', 'host' => '%sel%._domainkey', 'data' => 'p=%key%; rua=mailto:dmarc@%fqdn%', 'ttl' => 3600],
+        ['type' => 'CNAME', 'host' => '%Host%', 'pointsTo' => '%DOMAIN%.example.net', 'ttl' => 3600],
+    ]]);
+
+    expect($template->variables())->toBe(['sel', 'key']);
+});
+
 it('refuses a template without the required fields or with an unknown record type', function (): void {
     expect(fn () => Template::fromArray(['providerId' => 'x']))->toThrow(InvalidTemplate::class);
     expect(fn () => TemplateRecord::fromArray(['type' => 'PTR', 'host' => '@']))->toThrow(InvalidTemplate::class);

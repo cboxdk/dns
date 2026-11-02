@@ -17,10 +17,13 @@ it('returns standard base64 that the public key verifies', function (): void {
     $signature = (new OpenSslRs256Signer(DomainConnectFixture::file('test-private.pem')))->sign('domain=example.net');
     $raw = base64_decode($signature, true);
 
+    expect($raw)->toBeString();
+    assert(is_string($raw));
+
     expect($signature)->toMatch('#^[A-Za-z0-9+/]+={0,2}$#')
-        ->and(strlen((string) $raw))->toBe(256)
-        ->and(openssl_verify('domain=example.net', (string) $raw, DomainConnectFixture::file('test-public.pem'), OPENSSL_ALGO_SHA256))->toBe(1)
-        ->and(openssl_verify('domain=example.org', (string) $raw, DomainConnectFixture::file('test-public.pem'), OPENSSL_ALGO_SHA256))->toBe(0);
+        ->and(strlen($raw))->toBe(256)
+        ->and(openssl_verify('domain=example.net', $raw, DomainConnectFixture::file('test-public.pem'), OPENSSL_ALGO_SHA256))->toBe(1)
+        ->and(openssl_verify('domain=example.org', $raw, DomainConnectFixture::file('test-public.pem'), OPENSSL_ALGO_SHA256))->toBe(0);
 });
 
 it('refuses a key it cannot read', function (): void {

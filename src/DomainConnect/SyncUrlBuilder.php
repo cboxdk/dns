@@ -14,6 +14,9 @@ use Cbox\Dns\DomainConnect\Exceptions\SyncFlowUnavailable;
  */
 class SyncUrlBuilder
 {
+    /** Query parameters the flow itself uses; a template variable may not shadow them. */
+    public const array RESERVED_PARAMETERS = ['domain', 'host', 'redirect_uri', 'state', 'groupid', 'sig', 'key'];
+
     public function __construct(
         private readonly Signer $signer,
         private readonly string $keyHost = '_dcpubkeyv1',
@@ -49,7 +52,15 @@ class SyncUrlBuilder
         $template = $request->template;
         $names = $template->variables();
 
-        foreach (array_keys($request->variables) as $name) {
+        foreach ($names as $name) {
+            if (in_array(strtolower($name), self::RESERVED_PARAMETERS, true)) {
+                throw InvalidApplyRequest::because("template variable [{$name}] clashes with a built-in query parameter");
+            }
+        }
+
+        foreach (array_keys($request->variables) as $key) {
+            $name = (string) $key;
+
             if (! in_array($name, $names, true)) {
                 throw InvalidApplyRequest::because("variable [{$name}] is not used by the template");
             }
@@ -84,7 +95,7 @@ class SyncUrlBuilder
         }
 
         if ($request->groupIds !== []) {
-            $pairs['groupId'] = implode(',', $request->groupIds);
+            $pairs['groupId'] = implode(',', array_unique($request->groupIds));
         }
 
         return $pairs;

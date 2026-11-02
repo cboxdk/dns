@@ -39,10 +39,36 @@ it('refuses a chunk that would push a record past 255 bytes', function (): void 
     PublicKeyRecords::for(DomainConnectFixture::file('test-public.pem'), 236);
 })->throws(InvalidPayload::class);
 
-it('refuses a record without p= or d=', function (string $record): void {
-    PublicKeyRecords::toPem([$record]);
+it('refuses anything but an RSA public key', function (string $fixture): void {
+    PublicKeyRecords::for(DomainConnectFixture::file($fixture));
 })->throws(InvalidPayload::class)->with([
-    'no p' => ['a=RS256,d=MIIB'],
-    'no d' => ['p=1,a=RS256'],
-    'not a record' => ['hello'],
+    'the private key' => ['test-private.pem'],
+    'an EC public key' => ['test-ec-public.pem'],
+    'not a key' => ['README.md'],
+]);
+
+it('publishes a PKCS#1 RSA public key as its SPKI form', function (): void {
+    $records = PublicKeyRecords::for(DomainConnectFixture::file('test-rsa-pkcs1-public.pem'));
+
+    expect(PublicKeyRecords::toPem($records))->toBe(DomainConnectFixture::file('test-public.pem'));
+});
+
+it('ignores whitespace inside d=', function (): void {
+    $records = PublicKeyRecords::for(DomainConnectFixture::file('test-public.pem'));
+    $records[0] = substr($records[0], 0, 30).' '.substr($records[0], 30);
+
+    expect(PublicKeyRecords::toPem($records))->toBe(DomainConnectFixture::file('test-public.pem'));
+});
+
+it('refuses a malformed record set', function (array $records): void {
+    PublicKeyRecords::toPem($records);
+})->throws(InvalidPayload::class)->with([
+    'no p' => [['a=RS256,d=MIIB']],
+    'no d' => [['p=1,a=RS256']],
+    'not a record' => [['hello']],
+    'p=0' => [['p=0,a=RS256,d=MIIB']],
+    'duplicate p' => [['p=1,a=RS256,d=MIIB', 'p=1,a=RS256,d=AAAA']],
+    'gap in p' => [['p=1,a=RS256,d=MIIB', 'p=3,a=RS256,d=AAAA']],
+    'another algorithm' => [['p=1,a=ES256,d=MIIB']],
+    'no records' => [[]],
 ]);
