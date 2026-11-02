@@ -46,6 +46,27 @@ it('rejects malformed provider settings', function (array $payload): void {
     'name servers not list of strings' => [['providerId' => 'x', 'providerName' => 'X', 'nameServers' => ['a', 1]]],
 ])->throws(InvalidPayload::class);
 
+it('refuses a settings URL that is not plain https', function (string $field, string $url): void {
+    ProviderSettings::fromArray(['providerId' => 'x', 'providerName' => 'X', $field => $url]);
+})->with([
+    'http urlSyncUX' => ['urlSyncUX', 'http://dc.example'],
+    'javascript urlSyncUX' => ['urlSyncUX', 'javascript:alert(1)'],
+    'urlSyncUX with a query' => ['urlSyncUX', 'https://x/?q'],
+    'urlSyncUX with userinfo' => ['urlSyncUX', 'https://u@x/'],
+    'urlSyncUX with a fragment' => ['urlSyncUX', 'https://x/#f'],
+    'urlSyncUX without a host' => ['urlSyncUX', 'https:///path'],
+    'http urlAsyncUX' => ['urlAsyncUX', 'http://dc.example'],
+    'urlAPI with a query' => ['urlAPI', 'https://x/?q'],
+    'javascript urlControlPanel' => ['urlControlPanel', 'javascript:alert(1)'],
+])->throws(InvalidPayload::class, 'plain https URL');
+
+it('accepts plain https settings URLs with a port and a path', function (): void {
+    $settings = ProviderSettings::fromArray(['providerId' => 'x', 'providerName' => 'X', 'urlSyncUX' => 'https://dc.example:8443/connect', 'urlControlPanel' => 'https://[2001:db8::1]/panel']);
+
+    expect($settings->urlSyncUX)->toBe('https://dc.example:8443/connect')
+        ->and($settings->urlControlPanel)->toBe('https://[2001:db8::1]/panel');
+});
+
 it('round-trips a discovery result, including the not-available case', function (): void {
     $none = new Discovery(Zone::of('example.com'), null, null, new DateTimeImmutable('2026-11-02T10:00:00Z'));
     expect($none->isAvailable())->toBeFalse()->and($none->supportsTemplate())->toBeFalse()

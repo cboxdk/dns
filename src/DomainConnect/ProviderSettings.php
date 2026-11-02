@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Cbox\Dns\DomainConnect;
 
 use Cbox\Dns\DomainConnect\Exceptions\InvalidPayload;
+use Cbox\Dns\DomainConnect\Support\HttpsUrl;
 
 /**
  * A DNS provider's Domain Connect settings document
  * (https://_domainconnect.<domain>/v2/<domain>/settings).
+ *
+ * {@see self::fromArray()} reads an untrusted document, so each URL field, when
+ * present, must be plain https (a host; no userinfo, query or fragment) or the
+ * payload is refused with {@see InvalidPayload}.
  */
 readonly class ProviderSettings
 {
@@ -35,10 +40,10 @@ readonly class ProviderSettings
         return new self(
             providerId: self::string($data, 'providerId'),
             providerName: self::string($data, 'providerName'),
-            urlSyncUX: self::optionalString($data, 'urlSyncUX'),
-            urlAsyncUX: self::optionalString($data, 'urlAsyncUX'),
-            urlAPI: self::optionalString($data, 'urlAPI'),
-            urlControlPanel: self::optionalString($data, 'urlControlPanel'),
+            urlSyncUX: self::optionalUrl($data, 'urlSyncUX'),
+            urlAsyncUX: self::optionalUrl($data, 'urlAsyncUX'),
+            urlAPI: self::optionalUrl($data, 'urlAPI'),
+            urlControlPanel: self::optionalUrl($data, 'urlControlPanel'),
             width: self::int($data, 'width', 750),
             height: self::int($data, 'height', 750),
             nameServers: self::stringList($data, 'nameServers'),
@@ -95,6 +100,23 @@ readonly class ProviderSettings
     private static function optionalString(array $data, string $key): ?string
     {
         return ($data[$key] ?? null) === null ? null : self::string($data, $key);
+    }
+
+    /**
+     * An optional URL from the (untrusted) settings document: when present it
+     * must be plain https (a host, no userinfo, query or fragment).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function optionalUrl(array $data, string $key): ?string
+    {
+        $value = self::optionalString($data, $key);
+
+        if ($value !== null && ! HttpsUrl::isPlain($value)) {
+            throw InvalidPayload::because("provider settings field [{$key}] must be a plain https URL");
+        }
+
+        return $value;
     }
 
     /**

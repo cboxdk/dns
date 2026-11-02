@@ -8,6 +8,10 @@
   only RSA keys are published (`openssl ecparam -name prime256v1 -genkey -noout | openssl ec -pubout`).
 - `test-rsa-pkcs1-public.pem`: the test RSA public key in PKCS#1 form
   (`openssl rsa -in test-private.pem -RSAPublicKey_out`).
+- `test-rsa-1024.pem`: a throwaway 1024-bit RSA private key (`openssl genrsa 1024`),
+  used only to check that the signer refuses keys under 2048 bits.
+- `server.php`: the `php -S` router for the `StreamTransport` loopback test
+  (`/ok`, `/redirect`, `/big`, `/slow`, anything else 404).
 - `reference-signature.txt`: the RS256 signature (RSA PKCS#1 v1.5 over
   SHA-256, standard base64) of the spec's example query, produced with the
   `openssl` CLI, independent of the library's signer:

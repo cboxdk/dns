@@ -35,6 +35,32 @@ it('omits host for the apex and joins a urlSyncUX that carries a path with exact
         ->and($signer->signed())->toBe(['domain=acme.example&mx=m&dkim=k']);
 });
 
+it('joins a urlSyncUX that already ends in /v2 without doubling it', function (string $urlSyncUx, string $prefix): void {
+    $url = (new SyncUrlBuilder(new FakeSigner))->build(
+        new ApplyRequest(DomainConnectFixture::engageTemplate(), Zone::of('acme.example'), ['dkim' => 'k', 'mx' => 'm']),
+        new ProviderSettings('example', 'Example', urlSyncUX: $urlSyncUx),
+    );
+
+    expect($url)->toStartWith($prefix.'/v2/domainTemplates/providers/cbox.dk/services/engage-sending/apply?');
+})->with([
+    'ends in /v2' => ['https://dc.example/v2', 'https://dc.example'],
+    'ends in /v2/' => ['https://dc.example/v2/', 'https://dc.example'],
+    'ends in /V2' => ['https://dc.example/V2', 'https://dc.example'],
+    'carries a path' => ['https://dc.example/connect', 'https://dc.example/connect'],
+    'path ends in v2 without a slash' => ['https://dc.example/connectv2', 'https://dc.example/connectv2'],
+]);
+
+it('percent-encodes a variable with a space and non-ASCII characters in the signed query', function (): void {
+    $signer = new FakeSigner;
+    $url = (new SyncUrlBuilder($signer))->build(
+        new ApplyRequest(DomainConnectFixture::engageTemplate(), Zone::of('acme.example'), ['mx' => 'm', 'dkim' => 'k ø']),
+        new ProviderSettings('example', 'Example', urlSyncUX: 'https://dc.example'),
+    );
+
+    expect($signer->signed())->toBe(['domain=acme.example&mx=m&dkim=k%20%C3%B8'])
+        ->and($url)->toContain('?domain=acme.example&mx=m&dkim=k%20%C3%B8&sig=');
+});
+
 it('joins several groups with a comma', function (): void {
     $signer = new FakeSigner;
     (new SyncUrlBuilder($signer))->build(

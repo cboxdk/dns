@@ -6,7 +6,7 @@ use Cbox\Dns\DomainConnect\Signers\OpenSslRs256Signer;
 use Cbox\Dns\DomainConnect\Testing\FakeSigner;
 use Cbox\Dns\Tests\Support\DomainConnectFixture;
 
-it('signs the spec example exactly as the reference tooling does', function (): void {
+it('signs the spec example exactly as the openssl CLI does', function (): void {
     $signer = new OpenSslRs256Signer(DomainConnectFixture::file('test-private.pem'));
 
     expect($signer->sign('a=1&b=2&ip=10.10.10.10&domain=example.net'))
@@ -18,7 +18,6 @@ it('returns standard base64 that the public key verifies', function (): void {
     $raw = base64_decode($signature, true);
 
     expect($raw)->toBeString();
-    assert(is_string($raw));
 
     expect($signature)->toMatch('#^[A-Za-z0-9+/]+={0,2}$#')
         ->and(strlen($raw))->toBe(256)
@@ -37,6 +36,16 @@ it('refuses a key that is not RSA', function (): void {
 
     new OpenSslRs256Signer($pem);
 })->throws(RuntimeException::class, 'RSA');
+
+it('refuses an RSA key smaller than 2048 bits', function (): void {
+    new OpenSslRs256Signer(DomainConnectFixture::file('test-rsa-1024.pem'));
+})->throws(RuntimeException::class, 'at least 2048 bits');
+
+it('keeps the private key out of stack traces', function (): void {
+    $parameter = (new ReflectionMethod(OpenSslRs256Signer::class, '__construct'))->getParameters()[0];
+
+    expect($parameter->getAttributes(SensitiveParameter::class))->toHaveCount(1);
+});
 
 it('fakes a fixed signature and records what it signed', function (): void {
     $signer = new FakeSigner;

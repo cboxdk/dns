@@ -7,6 +7,11 @@ namespace Cbox\Dns\DomainConnect;
 /**
  * The zone a template is applied to: the registrable apex plus an optional
  * host (sub-domain) inside it.
+ *
+ * Both parts are ASCII: an IDN apex is held in its punycode form
+ * (`xn--blbr-roah.dk`, not `blåbær.dk`), as {@see ZoneLocator} returns it and as
+ * resolvers and DNS providers use it. `of()` lower-cases and trims but does not
+ * convert, so pass punycode when building a zone by hand.
  */
 readonly class Zone
 {

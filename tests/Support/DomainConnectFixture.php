@@ -142,4 +142,62 @@ final class DomainConnectFixture
     {
         return new DnsRecord(RecordType::SOA, $owner, "ns1.{$owner}. hostmaster.{$owner}. 1 7200 3600 1209600 300");
     }
+
+    /**
+     * Starts `php -S` on a free loopback port with the test router
+     * (tests/Fixtures/domain-connect/server.php) and waits until it accepts
+     * connections. Returns the process and its base URL, or null when the
+     * server could not be started.
+     *
+     * @return array{0: resource, 1: string}|null
+     */
+    public static function startLoopbackServer(): ?array
+    {
+        $probe = @stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+
+        if ($probe === false) {
+            return null;
+        }
+
+        $address = (string) stream_socket_get_name($probe, false);
+        fclose($probe);
+        $port = (int) substr($address, (int) strrpos($address, ':') + 1);
+
+        $process = proc_open(
+            [PHP_BINARY, '-S', "127.0.0.1:{$port}", __DIR__.'/../Fixtures/domain-connect/server.php'],
+            [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+
+        if (! is_resource($process)) {
+            return null;
+        }
+
+        $until = microtime(true) + 5;
+
+        while (microtime(true) < $until) {
+            set_error_handler(static fn (): bool => true); // a refused probe is expected while the server starts
+            $socket = fsockopen('127.0.0.1', $port, $errno, $error, 0.1);
+            restore_error_handler();
+
+            if ($socket !== false) {
+                fclose($socket);
+
+                return [$process, "http://127.0.0.1:{$port}"];
+            }
+
+            usleep(50_000);
+        }
+
+        self::stopLoopbackServer($process);
+
+        return null;
+    }
+
+    /** @param  resource  $process */
+    public static function stopLoopbackServer($process): void
+    {
+        proc_terminate($process);
+        proc_close($process);
+    }
 }

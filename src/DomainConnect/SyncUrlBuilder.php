@@ -7,6 +7,7 @@ namespace Cbox\Dns\DomainConnect;
 use Cbox\Dns\DomainConnect\Contracts\Signer;
 use Cbox\Dns\DomainConnect\Exceptions\InvalidApplyRequest;
 use Cbox\Dns\DomainConnect\Exceptions\SyncFlowUnavailable;
+use Cbox\Dns\DomainConnect\Support\HttpsUrl;
 
 /**
  * Builds the signed Domain Connect synchronous-flow apply URL
@@ -36,7 +37,7 @@ class SyncUrlBuilder
 
         $query = http_build_query($this->pairs($request), '', '&', PHP_QUERY_RFC3986);
 
-        return rtrim($settings->urlSyncUX, '/')
+        return HttpsUrl::base($settings->urlSyncUX)
             .'/v2/domainTemplates/providers/'.rawurlencode($template->providerId)
             .'/services/'.rawurlencode($template->serviceId)
             .'/apply?'.$query

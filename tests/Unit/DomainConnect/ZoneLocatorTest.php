@@ -58,3 +58,20 @@ it('treats a thrown DnsException as no SOA here and keeps walking', function ():
 
     expect((new ZoneLocator($resolver))->locate('mail.acme.example')->apex)->toBe('acme.example');
 });
+
+it('walks an IDN in its punycode form and returns an ASCII zone', function (): void {
+    $fake = DomainConnectFixture::resolverWithZone('xn--blbr-roah.dk');
+
+    expect((new ZoneLocator($fake))->locate('mail.Blåbær.dk'))->toEqual(Zone::of('xn--blbr-roah.dk', 'mail'));
+    $fake->assertQueried('xn--blbr-roah.dk', RecordType::SOA);
+});
+
+it('never takes a single-label TLD as the apex', function (): void {
+    $fake = DomainConnectFixture::resolverWithZone('com');
+
+    expect(fn () => (new ZoneLocator($fake))->locate('x.com'))->toThrow(ZoneNotFound::class);
+});
+
+it('throws ZoneNotFound for an empty name', function (string $name): void {
+    expect(fn () => (new ZoneLocator(DomainConnectFixture::resolverWithZone('com')))->locate($name))->toThrow(ZoneNotFound::class);
+})->with(['empty' => [''], 'dots and spaces' => [' . ']]);

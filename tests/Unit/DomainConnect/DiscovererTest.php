@@ -60,7 +60,6 @@ it('skips the template check without a template, without urlAPI, or with a non-h
 })->with([
     'no template' => [false, 'https://api.cloudflare.example'],
     'no urlAPI' => [true, null],
-    'http urlAPI' => [true, 'http://api.cloudflare.example'],
 ]);
 
 it('builds the support URL from urlAPI without a doubled slash', function (): void {
@@ -210,7 +209,7 @@ it('pins the AAAA address when the host has no A record', function (): void {
     expect($http->pinned())->toBe([DomainConnectFixture::SETTINGS_URL => '2001:4860::10']);
 });
 
-it('fails closed when either address lookup of the discovery host throws', function (RecordType $failing): void {
+it('fails closed when either address lookup of the discovery host fails', function (RecordType $failing): void {
     $fake = DomainConnectFixture::discoveryResolver()
         ->stub('dc.cloudflare.example', RecordType::AAAA, ['2001:4860::10'])
         ->stubFailure('dc.cloudflare.example', $failing, Rcode::ServFail);
@@ -273,10 +272,32 @@ it('skips the template check when urlAPI is unsafe or its host does not resolve 
     'no address' => ['https://api.internal.example', null, false],
     'lookup throws' => ['https://api.internal.example', null, true],
     'private IP literal' => ['https://169.254.169.254', null, false],
-    'userinfo' => ['https://api.cloudflare.example:x@127.0.0.1', null, false],
-    'query' => ['https://api.cloudflare.example?x=1', null, false],
-    'fragment' => ['https://api.cloudflare.example#x', null, false],
 ]);
+
+it('yields no settings and makes no further request when a settings URL is not plain https', function (string $field, string $url): void {
+    $http = (new FakeTransport)->strict()
+        ->stub(DomainConnectFixture::SETTINGS_URL, 200, array_merge(DomainConnectFixture::SETTINGS, [$field => $url]));
+
+    $discovery = DomainConnectFixture::discoverer(DomainConnectFixture::discoveryResolver(), $http)->discover('acme.example', DomainConnectFixture::engageTemplate());
+
+    expect($discovery->settings)->toBeNull()
+        ->and($discovery->supported)->toBeNull()
+        ->and($http->requests())->toBe([DomainConnectFixture::SETTINGS_URL]);
+})->with([
+    'javascript urlSyncUX' => ['urlSyncUX', 'javascript:alert(1)'],
+    'http urlAPI' => ['urlAPI', 'http://api.cloudflare.example'],
+    'urlAPI with userinfo' => ['urlAPI', 'https://api.cloudflare.example:x@127.0.0.1'],
+    'urlAPI with a query' => ['urlAPI', 'https://api.cloudflare.example?x=1'],
+    'urlAPI with a fragment' => ['urlAPI', 'https://api.cloudflare.example#x'],
+]);
+
+it('does not double /v2 when urlAPI already ends in it', function (string $urlApi): void {
+    $http = (new FakeTransport)->strict()
+        ->stub(DomainConnectFixture::SETTINGS_URL, 200, array_merge(DomainConnectFixture::SETTINGS, ['urlAPI' => $urlApi]))
+        ->stub(DomainConnectFixture::SUPPORT_URL, 200, '');
+
+    expect(DomainConnectFixture::discoverer(DomainConnectFixture::discoveryResolver(), $http)->discover('acme.example', DomainConnectFixture::engageTemplate())->supported)->toBeTrue();
+})->with(['https://api.cloudflare.example/v2', 'https://api.cloudflare.example/V2/']);
 
 it('yields no settings when the discovery host has no address', function (): void {
     $fake = DomainConnectFixture::resolverWithZone('acme.example')

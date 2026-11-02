@@ -14,9 +14,12 @@ use RuntimeException;
  */
 class OpenSslRs256Signer implements Signer
 {
+    /** The smallest RSA modulus accepted for signing. */
+    public const int MIN_KEY_BITS = 2048;
+
     private readonly OpenSSLAsymmetricKey $key;
 
-    public function __construct(string $privateKeyPem)
+    public function __construct(#[\SensitiveParameter] string $privateKeyPem)
     {
         if (! function_exists('openssl_sign')) {
             throw new RuntimeException('Signing Domain Connect requests requires ext-openssl.');
@@ -32,6 +35,10 @@ class OpenSslRs256Signer implements Signer
 
         if ($details === false || ($details['type'] ?? null) !== OPENSSL_KEYTYPE_RSA) {
             throw new RuntimeException('The Domain Connect signing key must be an RSA private key.');
+        }
+
+        if (($details['bits'] ?? 0) < self::MIN_KEY_BITS) {
+            throw new RuntimeException('The Domain Connect signing key must be an RSA key of at least '.self::MIN_KEY_BITS.' bits.');
         }
 
         $this->key = $key;

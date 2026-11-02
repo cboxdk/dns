@@ -5,9 +5,12 @@ declare(strict_types=1);
 use Cbox\Dns\Dns;
 use Cbox\Dns\DomainConnect\ApplyRequest;
 use Cbox\Dns\DomainConnect\DomainConnect;
+use Cbox\Dns\DomainConnect\Exceptions\DiscoveryRefused;
+use Cbox\Dns\DomainConnect\ProviderSettings;
 use Cbox\Dns\DomainConnect\Testing\FakeSigner;
 use Cbox\Dns\DomainConnect\Testing\FakeTransport;
 use Cbox\Dns\DomainConnect\Testing\InteractsWithDomainConnect;
+use Cbox\Dns\DomainConnect\Zone;
 use Cbox\Dns\Testing\FakeResolver;
 use Cbox\Dns\Tests\Support\DomainConnectFixture;
 
@@ -35,4 +38,28 @@ it('composes discovery, url building and checking over one resolver and transpor
 
 it('is reachable from the Dns facade', function (): void {
     expect((new Dns(new FakeResolver))->domainConnect(new FakeSigner, new FakeTransport))->toBeInstanceOf(DomainConnect::class);
+});
+
+it('keeps the discovery host check on even when the facade allows non-public nameservers', function (): void {
+    $fake = DomainConnectFixture::discoveryResolver(address: '10.0.0.5');
+    $http = (new FakeTransport)->strict()->stub(DomainConnectFixture::SETTINGS_URL, 200, DomainConnectFixture::SETTINGS);
+
+    expect(fn () => (new Dns($fake, allowNonPublicNameservers: true))->domainConnect(new FakeSigner, $http)->discover('acme.example'))
+        ->toThrow(DiscoveryRefused::class);
+    expect($http->requests())->toBe([]);
+
+    $discovery = (new Dns($fake))->domainConnect(new FakeSigner, $http, allowNonPublicHosts: true)->discover('acme.example');
+
+    expect($discovery->settings?->providerName)->toBe('Cloudflare')
+        ->and($http->requests())->toBe([DomainConnectFixture::SETTINGS_URL]);
+});
+
+it('passes the key host to the apply URL', function (): void {
+    $dc = (new Dns(new FakeResolver))->domainConnect(new FakeSigner, new FakeTransport, '_dcpubkeyv2');
+    $url = $dc->applyUrl(
+        new ApplyRequest(DomainConnectFixture::engageTemplate(), Zone::of('acme.example'), DomainConnectFixture::engageVariables()),
+        new ProviderSettings('cloudflare.com', 'Cloudflare', urlSyncUX: 'https://dc.cloudflare.example'),
+    );
+
+    expect($url)->toEndWith('&key=_dcpubkeyv2');
 });

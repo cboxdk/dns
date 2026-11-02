@@ -29,8 +29,12 @@ trait InteractsWithDomainConnect
         return $this->fakeSigner ??= new FakeSigner;
     }
 
+    /**
+     * Discovery runs with `allowNonPublicHosts` on, so no `A`/`AAAA` stubs are
+     * needed for the provider's hosts and requests are not pinned.
+     */
     protected function domainConnect(string $keyHost = '_dcpubkeyv1'): DomainConnect
     {
-        return $this->fakeDnsFacade()->domainConnect($this->fakeSigner(), $this->fakeTransport(), $keyHost);
+        return $this->fakeDnsFacade()->domainConnect($this->fakeSigner(), $this->fakeTransport(), $keyHost, allowNonPublicHosts: true);
     }
 }

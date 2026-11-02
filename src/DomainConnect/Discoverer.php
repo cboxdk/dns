@@ -11,6 +11,7 @@ use Cbox\Dns\DomainConnect\Contracts\Transport;
 use Cbox\Dns\DomainConnect\Exceptions\DiscoveryRefused;
 use Cbox\Dns\DomainConnect\Exceptions\InvalidPayload;
 use Cbox\Dns\DomainConnect\Exceptions\ZoneNotFound;
+use Cbox\Dns\DomainConnect\Support\HttpsUrl;
 use Cbox\Dns\Enums\RecordType;
 use Cbox\Dns\Exceptions\DnsException;
 use Cbox\Dns\Support\IpAddress;
@@ -74,7 +75,7 @@ class Discoverer
         }
 
         $url = 'https://'.rtrim($value, '/')."/v2/{$apex}/settings";
-        $host = $this->safeHost($url);
+        $host = HttpsUrl::host($url);
 
         if ($host === null) {
             throw DiscoveryRefused::because($apex, 'the _domainconnect value is not a plain https host, host:port or host/path');
@@ -100,10 +101,10 @@ class Discoverer
             return null;
         }
 
-        $url = rtrim($settings->urlAPI, '/')
+        $url = HttpsUrl::base($settings->urlAPI)
             .'/v2/domainTemplates/providers/'.rawurlencode($template->providerId)
             .'/services/'.rawurlencode($template->serviceId);
-        $host = $this->safeHost($url);
+        $host = HttpsUrl::host($url);
 
         if ($host === null) {
             return null;
@@ -121,30 +122,6 @@ class Discoverer
             $response->status === 404 => false,
             default => null,
         };
-    }
-
-    /**
-     * The host of an https URL with no userinfo, query or fragment, whose host is
-     * a hostname or (bracketed) IP literal; brackets stripped. Null otherwise.
-     */
-    private function safeHost(string $url): ?string
-    {
-        $parts = parse_url($url);
-
-        if (! is_array($parts)
-            || strtolower($parts['scheme'] ?? '') !== 'https'
-            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
-        ) {
-            return null;
-        }
-
-        $host = $parts['host'] ?? '';
-
-        if (preg_match('/^\[(.+)\]$/', $host, $m) === 1) {
-            return filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? $m[1] : null;
-        }
-
-        return preg_match('/^[A-Za-z0-9.-]+$/', $host) === 1 ? $host : null;
     }
 
     /**

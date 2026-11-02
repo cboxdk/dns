@@ -197,14 +197,19 @@ class Dns
      * The Domain Connect front door: discover whether a name's DNS provider supports
      * a template, build signed apply URLs, and check the records afterwards — all
      * through this facade's resolver. The default transport is {@see StreamTransport}.
+     *
+     * @param  bool  $allowNonPublicHosts  let discovery fetch from provider hosts on
+     *                                     non-public addresses (and skip pinning);
+     *                                     for local testing only. Independent of
+     *                                     `allowNonPublicNameservers`.
      */
-    public function domainConnect(Signer $signer, ?Transport $transport = null, string $keyHost = '_dcpubkeyv1'): DomainConnect
+    public function domainConnect(Signer $signer, ?Transport $transport = null, string $keyHost = '_dcpubkeyv1', bool $allowNonPublicHosts = false): DomainConnect
     {
         $discoverer = new Discoverer(
             $this->resolver,
             $transport ?? new StreamTransport,
             new ZoneLocator($this->resolver),
-            allowNonPublicHosts: $this->allowNonPublicNameservers,
+            allowNonPublicHosts: $allowNonPublicHosts,
         );
 
         return new DomainConnect($discoverer, new SyncUrlBuilder($signer, $keyHost), $this->resolver);

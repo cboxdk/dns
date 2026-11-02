@@ -23,6 +23,8 @@ it('passes string bodies through verbatim and asserts requested urls', function 
     expect($response->status)->toBe(201)
         ->and($response->body)->toBe('raw');
     $fake->assertRequested('https://a/');
+
+    expect(fn () => $fake->assertRequested('https://b/'))->toThrow(RuntimeException::class, 'https://b/');
 });
 
 it('turns a non-2xx status into ok() false and a non-JSON body into json() null', function (): void {

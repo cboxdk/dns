@@ -7,7 +7,7 @@ namespace Cbox\Dns\DomainConnect\Testing;
 use Cbox\Dns\DomainConnect\Contracts\Transport;
 use Cbox\Dns\DomainConnect\HttpResponse;
 use LogicException;
-use PHPUnit\Framework\Assert;
+use RuntimeException;
 
 class FakeTransport implements Transport
 {
@@ -77,8 +77,13 @@ class FakeTransport implements Transport
         return $this->pinned;
     }
 
+    /**
+     * @throws RuntimeException when no request to the URL was recorded
+     */
     public function assertRequested(string $url): void
     {
-        Assert::assertContains($url, $this->requests, "Expected a request to [{$url}].");
+        if (! in_array($url, $this->requests, true)) {
+            throw new RuntimeException("Expected a request to [{$url}], but none was recorded.");
+        }
     }
 }
