@@ -52,6 +52,12 @@ final class DomainConnectFixture
         return Template::fromJson($json);
     }
 
+    /** @return array<string, string> */
+    public static function engageVariables(): array
+    {
+        return ['mx' => 'feedback-smtp.eu-west-1.amazonses.com', 'dkim' => 'MIGf'];
+    }
+
     /**
      * The engage-sending template with its records replaced by `$records`.
      *

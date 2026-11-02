@@ -10,6 +10,9 @@ use Cbox\Dns\DomainConnect\Exceptions\InvalidApplyRequest;
 /**
  * The records a zone should carry once a template is applied with a set of
  * variables: every %variable% substituted, every host made absolute.
+ *
+ * Required variables are checked only on the records the group filter keeps;
+ * SyncUrlBuilder is the strict gate for the apply URL.
  */
 readonly class RecordSet
 {
@@ -29,7 +32,9 @@ readonly class RecordSet
     {
         $known = $template->variables();
 
-        foreach (array_keys($variables) as $name) {
+        foreach (array_keys($variables) as $key) {
+            $name = (string) $key;
+
             if (! in_array($name, $known, true)) {
                 throw InvalidApplyRequest::because("unknown variable [{$name}]");
             }
@@ -138,17 +143,17 @@ readonly class RecordSet
             'fqdn' => $zone->fqdn(),
         ];
 
-        $text = (string) preg_replace_callback(
+        $text = preg_replace_callback(
             '/%(domain|host|fqdn)%/i',
             static fn (array $m): string => $builtIn[strtolower($m[1])],
             $text,
-        );
+        ) ?? throw InvalidApplyRequest::because('could not expand variables');
 
-        return (string) preg_replace_callback(
+        return preg_replace_callback(
             '/%([a-z0-9_]+)%/i',
             static fn (array $m): string => $variables[$m[1]]
                 ?? throw InvalidApplyRequest::because("missing variable [{$m[1]}]"),
             $text,
-        );
+        ) ?? throw InvalidApplyRequest::because('could not expand variables');
     }
 }
